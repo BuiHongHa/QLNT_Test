@@ -239,8 +239,8 @@ def get_teachers():
         cursor.execute("""
             SELECT t.*, 
                    GROUP_CONCAT(m.id_class SEPARATOR ', ') AS homeroom_classes,
-                   a.role_id,
-                   r.name AS role_name
+                   MAX(a.role_id) AS role_id,
+                   MAX(r.name) AS role_name
             FROM tTeacher t
             LEFT JOIN MANAGE m ON t.id_VNeID = m.id_teacher AND m.is_active = 1
             LEFT JOIN tAccount a ON t.id_VNeID = a.username AND a.is_active = 1

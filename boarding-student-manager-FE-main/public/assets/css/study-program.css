@@ -1,0 +1,57 @@
+.box-scores li .meta {
+    line-height: 16px;
+}
+
+.study-program-block ul {
+    padding-top: 15px;
+}
+
+.study-program-block li {
+    border: none;
+    padding-bottom: 15px;
+    cursor: pointer;
+}
+
+.study-program-block .block-label {
+    text-transform: inherit;
+    font-size: 15px;
+}
+
+.study-program-modal .modal-body p {
+    font-size: 14px;
+}
+
+.study-program-modal .modal-body p span {
+    color: #666666;
+    width: 160px;
+    display: inline-block;
+}
+
+.label-bottom-line span {
+    font-weight: bold;
+    color: var(--dask-blue);
+    margin-bottom: 20px;
+    position: relative;
+    display: inline-block;
+}
+
+.label-bottom-line span::before {
+    content: "";
+    width: 100%;
+    height: 3px;
+    background-color: var(--dask-blue);
+    position: absolute;
+    bottom: -5px;
+}
+
+.study-program-modal .table {
+    font-size: 14px;
+}
+
+.study-program-modal .btn {
+    color: var(--dask-blue);
+}
+
+.table-light {
+    border-style: double;
+}

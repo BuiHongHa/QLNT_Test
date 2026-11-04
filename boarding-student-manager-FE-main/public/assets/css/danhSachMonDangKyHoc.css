@@ -1,0 +1,126 @@
+.class-group {
+    padding: 10px 17px 17px 17px;
+}
+
+.masonry-class-reg-1 .subject-item {
+    margin: 8px;
+}
+
+.masonry-class-reg-1 .box-classroom-section {
+    margin-bottom: 10px;
+}
+
+.masonry-class-reg-1 .classroom-detail {
+    padding: 0px 10px;
+}
+
+.masonry-class-reg-1 .classroom-detail-sum {
+    width: 40%;
+}
+
+.masonry-class-reg-1 .classroom-day {
+    width: 60%;
+}
+
+.class-reg-search {
+    padding: 20px 25px 0px 25px;
+    width: 100%;
+}
+
+    .class-reg-search .lable {
+        line-height: 40px;
+        text-align: right;
+        padding-right: 5px;
+    }
+
+    .class-reg-search .form-add-info .form-select {
+        padding-left: 12px;
+        height: 40px;
+        line-height: 30px;
+    }
+
+.class-reg-search-btn {
+    padding-left: 0px;
+}
+
+@media (min-width: 1024px) {
+    .masonry-class-reg-1 .subject-item {
+        width: calc(50% - 16px);
+    }
+}
+
+@media (min-width: 1440px) {
+    .masonry-class-reg-1 .subject-item {
+        width: calc(33.333333% - 16px);
+    }
+}
+
+@media (min-width: 1920px) {
+    .masonry-class-reg-1 .subject-item {
+        width: calc(25% - 16px);
+    }
+}
+
+@media (min-width: 600px) and (max-width: 800px) {
+    .masonry-class-reg-1 .classroom-section-item {
+        width: 100%;
+    }
+
+    .masonry-class-reg-1 .subject-item {
+        margin: 0px 0px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 900px) {
+    .class-reg-search .col-lg-8 {
+        width: 80%;
+    }
+
+    .class-reg-search .col-lg-4 {
+        width: 20%;
+    }
+
+    .masonry-class-reg-1 .subject-item {
+        width: calc(50% - 16px) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .class-reg-search {
+        overflow-x: hidden;
+        width: 100%;
+        padding: 10px 0px 0px 12px;
+    }
+
+        .class-reg-search .col-12 {
+            padding-left: 12px;
+        }
+
+        .class-reg-search .lable {
+            line-height: 30px;
+            text-align: left;
+        }
+
+    .class-reg-search-btn {
+        padding-left: 12px;
+        margin-top: 10px;
+        padding-right: 0px;
+    }
+
+        .class-reg-search-btn .btn-dask-blue {
+            width: 100%;
+        }
+
+    .class-reg-search .col-md-7 {
+        padding-right: 0px;
+    }
+
+    .class-group {
+        padding: 10px 0px;
+        overflow-x: hidden;
+    }
+
+    .masonry-class-reg-1 .subject-item {
+        margin: 8px 0px;
+    }
+}

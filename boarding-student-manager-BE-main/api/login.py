@@ -23,7 +23,12 @@ ROLE_LABELS = {
 }
 
 def normalize_role_name(role_name):
-    if role_name in ('guardian', 'guard'):
+    if not role_name:
+        return 'manager'
+    role_lower = str(role_name).lower()
+    if role_lower in ('admin', 'administrator', 'root'):
+        return 'manager'
+    if role_lower in ('guardian', 'guard'):
         return 'dorm_manager'
     return role_name
 
@@ -35,18 +40,23 @@ def find_active_user(username):
             SELECT a.*, r.name as role_name,
                    COALESCE(t.name, s.name, a.username) AS display_name
             FROM tAccount a
-            JOIN tRole r ON a.role_id = r.id
+            LEFT JOIN tRole r ON a.role_id = r.id
             LEFT JOIN tTeacher t ON a.username = t.id_VNeID AND t.is_active = 1
             LEFT JOIN tStudent s ON a.username = s.id_VNeID AND s.is_active = 1
             WHERE a.username = %s AND a.is_active = 1
         """, (username,))
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        if row and (row.get('username') == 'admin' or not row.get('role_name')):
+            if not row.get('role_name') or row.get('role_name') == 'admin':
+                row['role_name'] = 'manager'
+        return row
     finally:
         cursor.close()
         conn.close()
 
 def serialize_user(user):
     user.pop('password', None)
+    user.pop('password_hash', None)
     user['role_name'] = normalize_role_name(user.get('role_name'))
     user['role_label'] = ROLE_LABELS.get(user.get('role_name'), user.get('role_name'))
     return user
@@ -60,8 +70,9 @@ def auth_login():
     
     try:
         user = find_active_user(username)
+        pwd_hash = user.get('password') or user.get('password_hash') if user else None
         
-        if user and check_password_hash(user['password'], password):
+        if user and pwd_hash and check_password_hash(pwd_hash, password):
             access_token = create_access_token(identity=username)
             refresh_expires = timedelta(days=30 if remember_me else 1)
             refresh_token = create_refresh_token(

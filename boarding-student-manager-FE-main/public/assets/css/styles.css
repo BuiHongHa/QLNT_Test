@@ -1,0 +1,381 @@
+
+/*.wrapper {
+    background-image: url("../../anhbgmenu.png");
+}*/
+@import "bootstrap.min.css?v=12";
+@import "jquery-ui.min.css?v=12";
+@import url('fonts.css?v=12');
+@import url('swiper-bundle.min.css?v=12');
+@import "awesome-5.min.css?v=12";
+@import "slick.css?v=12";
+@import "select2.min.css?v=12";
+@import "all.css?v=31";
+@import "login.css?v=12";
+@import "1cuaSV.css?v=17";
+@import "register-school.css?v=12";
+@import "gochoctap.css?v=12";
+@import "tai-chinh.css?v=12";
+@import "ketquadangky.css?v=12";
+@import "news.css?v=12";
+@import "chat.css?v=12";
+@import "study-program.css?v=12";
+@import "my-calendar.css?v=12";
+@import "dangkyhoc-nguyenvong.css?v=12";
+@import "danhSachMonDangKyHoc.css?v=13";
+@import "select-2-custom.css?v=12";
+@import "responsive.css?v=16";
+:root {
+    --color-table-bg: rgba(0, 32, 109, 0.85);
+    --color-quay-1: #1b9ad6;
+    --color-quay-2: #0247fe;
+    --color-quay-3: #3d01a4;
+    --color-quay-4: #8601af;
+    --color-quay-5: #a7194b;
+    --color-quay-6: #fd5308;
+    --color-quay-7: #66b032;
+    --color-red: #e20303;
+    --color-text-label: #1b9ad6;
+    --color-text-time: #1e9bd7;
+    --color-row-bg: rgba(225, 225, 225, 0.2);
+    --color-row-thead-bg: #00206d;
+}
+.td-center {
+    text-align: center !important
+}
+table > tbody > tr:hover {
+    background-color:#eeeef0;
+}
+.btn-lg {
+    padding: 0.35rem 1rem;
+    font-size: 1rem;
+}
+.pointer {
+    cursor: pointer
+}
+.finance-modal .form-add-info .form-label {
+    font-size: unset;
+    color: unset;
+}
+
+.finance-modal .select2-container--open {
+    max-width: unset;
+}
+
+.zone-bus .select2-container--open {
+    max-width: unset;
+}
+@media (min-width: 769px) {
+    .modal.fade .btn-close {
+        display: unset;
+    }
+}
+.led-don-sv-html {
+    font-size: 1.04vw;
+}
+
+.led-don-sv {
+    font-family: "montserrat";
+    padding: 0.45rem;
+    width: 100vw;
+    height: 100vh;
+    background: url(../images/bg-led-event.png);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: top center;
+    overflow: hidden;
+}
+
+.led-don-sv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.led-don-sv-header-logo img {
+    height: 3rem;
+}
+
+.led-don-sv-header-title {
+    font-size: 1.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--color-red);
+}
+
+.led-don-sv-header-date {
+    font-size: 1.5rem;
+    color: var(--color-text-time);
+    font-weight: 700;
+}
+
+.led-don-sv-content {
+    background: var(--color-table-bg);
+    border-radius: 1rem;
+    overflow: hidden;
+    width: 100%;
+    border: solid 0.05rem #fff;
+    margin-top: 1rem;
+    padding: 0.1rem 0.3rem;
+    height: 90vh;
+}
+
+.led-don-sv-table {
+    width: 100%;
+    color: #fff;
+    /* border-radius: 1rem; */
+    overflow: hidden;
+}
+
+    .led-don-sv-table td {
+        vertical-align: middle;
+        height: 2.2rem;
+        padding: 0.15rem 0.75rem;
+    }
+
+    .led-don-sv-table thead td {
+        color: var(--color-text-label);
+        background: var(--color-row-thead-bg);
+        height: 2.4rem;
+        font-weight: 600;
+    }
+
+        .led-don-sv-table thead td:last-child {
+            width: 21.1rem;
+        }
+
+    .led-don-sv-table tbody tr:nth-child(odd) {
+        background: var(--color-row-bg);
+    }
+
+    .led-don-sv-table  tbody:before {
+        content: "@";
+        display: block;
+        line-height: 0.3rem;
+        text-indent: -99999px;
+    }
+
+.quay-number {
+    border-radius: 0.75rem;
+    background: red;
+    width: fit-content;
+    height: 1.7rem;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    color: #fff;
+}
+
+.quay-1 {
+    background: var(--color-quay-1);
+}
+
+.quay-2 {
+    background: var(--color-quay-2);
+}
+
+.quay-3 {
+    background: var(--color-quay-3);
+}
+
+.quay-4 {
+    background: var(--color-quay-4);
+}
+
+.quay-5 {
+    background: var(--color-quay-5);
+}
+
+.quay-6 {
+    background: var(--color-quay-6);
+}
+
+.quay-7 {
+    background: var(--color-quay-7);
+}
+
+.led-don-sv-select-list {
+    display: flex;
+    align-items: center;
+    gap: 2.5rem;
+    padding: 0.5rem 0.8rem;
+}
+
+.led-don-sv-select-item {
+    display: flex;
+    align-items: center;
+}
+
+    .led-don-sv-select-item .label {
+        font-weight: 600;
+        color: var(--color-text-label);
+        flex-shrink: 0;
+        margin-right: 1rem;
+    }
+
+    .led-don-sv-select-item .form-select {
+        height: 2.2rem;
+        background-size: 0.8rem;
+        background-color: transparent;
+        border-color: var(--color-text-label);
+        color: #fff;
+        background-image: url(../images/Chevron-icon-drop-down-menu-WHITE.png);
+        min-width: 15rem;
+    }
+
+        .led-don-sv-select-item .form-select option {
+            color: #222222;
+        }
+
+.led-don-sv-table tbody tr:hover td {
+    color: var(--color-row-thead-bg);
+    background-color: #eeeef0 !important;
+}
+
+.leb-table .swiper-slide {
+    height: 2.2rem;
+    display: flex;
+    width: 100%;
+}
+
+    .leb-table .swiper-slide:nth-child(2n-1) {
+        background: #2a488f;
+    }
+
+.leb-table .swiper {
+    height: 100%;
+    position: relative;
+}
+
+.leb-table {
+    height: calc(100% - 2rem);
+}
+
+.led-table-cell {
+    display: flex;
+    align-items: center;
+    color: #ffffff;
+    padding: 0 1rem;
+}
+
+    .led-table-cell:nth-child(1) {
+        width: 6%;
+    }
+
+    .led-table-cell:nth-child(2) {
+        width: 15%;
+    }
+
+    .led-table-cell:nth-child(3) {
+        width: 15%;
+    }
+
+    .led-table-cell:nth-child(4) {
+        width: 10%;
+    }
+
+    .led-table-cell:nth-child(5) {
+        width: 9%;
+    }
+
+    .led-table-cell:nth-child(6) {
+        flex: 1;
+    }
+
+    .led-table-cell:nth-child(7) {
+        width: 21.6rem;
+    }
+
+.theader {
+    display: flex;
+    /* margin-bottom: 0.3rem; */
+}
+
+    .theader .led-table-cell {
+        color: var(--color-text-label);
+        background: var(--color-row-thead-bg);
+        height: 2.4rem;
+        font-weight: 600;
+    }
+
+.mySwiper .swiper-wrapper {
+    flex-direction: column;
+}
+.led-don-sv-btn,
+.led-don-sv-btn:hover {
+    background: var(--color-text-label);
+    height: 2.2rem;
+    padding: 0.375rem 0.75rem;
+    color: #fff;
+    border-radius: 0.375rem;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+#dahoanthanh .modal-content {
+    background: var(--color-table-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+#dahoanthanh .modal-header,
+#dahoanthanh .modal-footer {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border: none;
+}
+
+#dahoanthanh .modal-title {
+    font-size: 1.5rem;
+    color: #fff;
+}
+
+#dahoanthanh .btn-close {
+    background: transparent url("../images/Close-44.png");
+    background-size: 1.2rem;
+    background-repeat: no-repeat;
+    background-position: center center;
+}
+
+/* width */
+
+#dahoanthanh .modal-body::-webkit-scrollbar {
+    width: 0.5rem;
+}
+
+/* Track */
+
+#dahoanthanh .modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Handle */
+
+#dahoanthanh .modal-body::-webkit-scrollbar-thumb {
+    background: var(--color-text-label);
+    border-radius: 0.3rem;
+}
+
+#dahoanthanh .led-don-sv-table thead td:last-child {
+    width: 11rem;
+}
+.title-is-paging:has(button) {
+    padding: 10px 3px;
+}
+
+    .title-is-paging:has(button) p {
+        order: 1;
+        margin-bottom: 0;
+        margin-right: auto;
+    }
+
+    .title-is-paging:has(button) button {
+        order: 3;
+        padding: 0 15px !important;
+        margin-left: 10px !important;
+        height: 38px !important;
+    }
+
+    .title-is-paging:has(button) input {
+        order: 2;
+    }

@@ -1,0 +1,729 @@
+.calendar-week-table {
+    text-align: center;
+}
+
+.date-header {
+    border-bottom: solid 1px var(--dask-blue);
+    display: flex;
+    width: 100%;
+}
+
+    .date-header .day {
+        font-size: 26px;
+        line-height: 26px;
+    }
+
+    .date-header .text {
+        font-size: 14px;
+        color: #666666;
+        padding-bottom: 10px;
+    }
+
+.date-body {
+    display: flex;
+    height: 665px;
+    overflow-y: scroll;
+}
+
+    /* width */
+
+    .date-body::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    /* Track */
+
+    .date-body::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    /* Handle */
+
+    .date-body::-webkit-scrollbar-thumb {
+        background: #dce3f6;
+    }
+
+        /* Handle on hover */
+
+        .date-body::-webkit-scrollbar-thumb:hover {
+            background: #b0c0ea;
+        }
+
+.day-of-week {
+    width: 13%;
+}
+
+.calendar-week-table .date {
+    width: 9%;
+}
+
+.hour-row {
+    height: 50px;
+    position: relative;
+    border-bottom: solid 1px #f1f1f1;
+}
+
+    .hour-row::before {
+        content: "";
+        width: 110%;
+        top: 50%;
+        right: 0;
+        background-color: #e1e1e1;
+        position: absolute;
+        height: 1px;
+    }
+
+    .hour-row::after {
+        content: "";
+        width: 1px;
+        bottom: 0;
+        left: 0;
+        background-color: #e1e1e1;
+        position: absolute;
+        height: 133%;
+    }
+
+.date .hour-row::before {
+    height: 0;
+}
+
+.date .hour-row::after {
+    width: 0;
+}
+
+.day-of-week .task {
+    width: 100%;
+    padding: 2px;
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.date .hour-row {
+    border-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.my-calendar .news-search-form {
+    border-bottom: solid 1px #e1e1e1;
+    padding: 15px 15px 0 15px;
+}
+
+.task-header {
+    color: white;
+    max-height: 40px;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+    .task-header .title {
+        font-size: 15px;
+        font-weight: bold;
+        line-height: 20px;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-break: break-word;
+    }
+
+    .task-header .task-date {
+        font-size: 13px;
+        line-height: 15px;
+    }
+
+    .task-header .student-num {
+        width: 25px;
+        height: 25px;
+        background: white;
+        border-radius: 100%;
+        margin-left: auto;
+        font-size: 14px;
+        align-items: center;
+        justify-content: center;
+        display: flex;
+        flex-shrink: 0;
+    }
+
+.day-of-week .task .task-description {
+    background-color: white;
+    font-size: 14px;
+    line-height: 17px;
+    margin-top: auto;
+    height: calc(100% - 40px);
+    padding: 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.calendar-week-table {
+    padding: 15px;
+}
+
+.date-header {
+    padding-right: 4px;
+}
+
+.day-of-week {
+    position: relative;
+}
+
+    .day-of-week::after {
+        content: "";
+        width: 1px;
+        bottom: 0;
+        left: 0;
+        background-color: #e1e1e1;
+        position: absolute;
+        height: 15px;
+    }
+
+.block-calendar .block-label {
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+    text-transform: inherit;
+}
+
+    .block-calendar .block-label .next-prev-month {
+        margin-left: auto;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+.block-calendar ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+}
+
+    .block-calendar ul li {
+        width: 14.285%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 9px 0;
+        cursor: pointer;
+    }
+
+    .block-calendar ul.weekdays,
+    .day-of-other-month {
+        color: #666666;
+    }
+
+.calendar-block-cover {
+    padding: 15px 10px;
+}
+
+.block-calendar ul li.active span {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background-color: var(--orange);
+    border-radius: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.my-calendar .news-search-form .btn {
+    background-color: white;
+    border: 1px solid #acbeec;
+    color: #222222;
+    width: 115px;
+}
+
+    .my-calendar .news-search-form .btn.btn-orange {
+        background-color: var(--orange);
+        margin-left: 15px;
+        margin-right: 15px;
+        color: white;
+    }
+
+.form-group-cover {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: #666666;
+}
+
+.calendar-form-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+    .calendar-form-top .btn {
+        margin-left: 10px;
+    }
+
+.modal.my-calendar .table thead th {
+    background: #f1f1f1;
+    border: none;
+}
+
+.change-calendar .form-control {
+    height: auto;
+    line-height: 24px;
+    border-radius: 6px !important;
+}
+
+.change-calendar label {
+    font-size: 14px;
+    color: #666666;
+    margin-right: 15px;
+    width: 140px;
+    flex-shrink: 0;
+    margin-top: 8px;
+}
+
+.change-calendar .form-item {
+    display: flex;
+    margin-bottom: 15px;
+    text-align: right;
+}
+
+    .change-calendar .form-item .form-control {
+        font-size: 14px;
+        padding-left: 35px;
+    }
+
+    .change-calendar .form-item .input-group i {
+        top: 10px;
+    }
+
+    .change-calendar .form-item .right {
+        display: flex;
+        width: 100%;
+    }
+
+    .change-calendar .form-item.on-row .input-group {
+        width: 25%;
+        flex-shrink: 0;
+        min-width: 185px;
+    }
+
+    .change-calendar .form-item.on-row .right .input-group {
+        min-width: 200px;
+    }
+
+    .change-calendar .form-item.on-row .right label {
+        width: 77px;
+        margin-left: auto;
+    }
+
+    .change-calendar .form-item.on-row .right .arrow {
+        flex: 1 auto;
+        text-align: center;
+        position: relative;
+        margin: 0 20px;
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+        color: #000000;
+        font-weight: bold;
+        justify-content: center;
+        height: 38px;
+        min-width: 30px;
+    }
+
+        .change-calendar .form-item.on-row .right .arrow span {
+            margin-bottom: 25px;
+        }
+
+        .change-calendar .form-item.on-row .right .arrow::before {
+            content: "";
+            width: calc(100% - 5px);
+            height: 2px;
+            background: #000000;
+            position: absolute;
+            left: 0;
+        }
+
+        .change-calendar .form-item.on-row .right .arrow::after {
+            content: "";
+            width: 0;
+            height: 0;
+            border-left: 10px solid #000000;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            position: absolute;
+            right: 0;
+        }
+
+        .change-calendar .form-item.on-row .right .arrow.none-title::before {
+            background: #cccccc;
+        }
+
+        .change-calendar .form-item.on-row .right .arrow.none-title::after {
+            border-left: 10px solid #cccccc;
+        }
+
+.modal-body .title-center-line {
+    font-weight: bold;
+    position: relative;
+    align-items: center;
+    display: flex;
+}
+
+    .modal-body .title-center-line::before {
+        height: 1px;
+        width: 100%;
+        content: "";
+        background: #e1e1e1;
+        position: absolute;
+    }
+
+    .modal-body .title-center-line span {
+        position: relative;
+        background: white;
+        padding-right: 10px;
+    }
+
+.change-calendar .form-item .input-group .form-control:disabled {
+    border: #ced4da;
+}
+
+    .change-calendar .form-item .input-group .form-control:disabled ~ i {
+        color: #222222;
+    }
+
+.form-add-info .form-control:disabled {
+    background-color: #e9ecef;
+    opacity: 1;
+}
+
+.change-calendar .searchBoxElement {
+    text-align: left;
+}
+
+.change-calendar {
+    padding: 0;
+}
+
+.caledar-input {
+    padding: 15px 20px 0 20px;
+}
+
+.change-calendar .gv-button-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+}
+
+.block-label.light-blue {
+    background: #627ab5;
+    font-style: 15px;
+}
+
+.class-change-calendar-item {
+    color: #222222;
+    padding: 5px 15px;
+    display: block;
+    border-bottom: solid 1px #e1e1e1;
+    margin-top: 5px;
+}
+
+    .class-change-calendar-item:last-child {
+        border: none;
+    }
+
+    .class-change-calendar-item p {
+        margin-bottom: 5px;
+    }
+
+.class-change-calendar {
+    height: 378px;
+    overflow-y: scroll;
+}
+
+    /* width */
+
+    .class-change-calendar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    /* Track */
+
+    .class-change-calendar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    /* Handle */
+
+    .class-change-calendar::-webkit-scrollbar-thumb {
+        background: #dce3f6;
+    }
+
+        /* Handle on hover */
+
+        .class-change-calendar::-webkit-scrollbar-thumb:hover {
+            background: #b0c0ea;
+        }
+
+.news-search-form .form-group.date-input.search {
+    max-width: 240px;
+}
+
+    .news-search-form .form-group.date-input.search i {
+        color: #222222;
+    }
+
+.form-label {
+    flex-shrink: 0;
+}
+
+.summary-atten {
+    padding: 4px;
+    padding-left: 15px;
+    color: white;
+}
+
+    .summary-atten span {
+        margin-left: 50px;
+        flex-shrink: 0;
+    }
+
+    .summary-atten .btn-outline-orange {
+        background: white;
+        margin-left: 15px;
+        min-width: 185px;
+    }
+
+        .summary-atten .btn-outline-orange:hover {
+            background: var(--dask-blue);
+        }
+
+        .summary-atten .btn-outline-orange span {
+            margin-left: 0;
+        }
+
+.form-control.in-table {
+    width: 42px;
+    height: 26px;
+    padding: 0;
+    border-radius: 2px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.atten-mid span {
+    margin-left: auto;
+}
+
+.atten-mid .form-control {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.atten-mid-btn {
+    background: white;
+    border-color: white;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    height: 32px;
+    margin-left: 1px;
+}
+
+    .atten-mid-btn i {
+        position: initial;
+        margin-top: 3px;
+    }
+
+.bg-orange {
+    background: var(--orange);
+}
+
+.summary-atten .btn span {
+    margin-left: 0;
+}
+
+.summary-atten.atten-mid {
+    margin-bottom: 3px;
+}
+
+#my_calendar .modal-lg {
+    max-width: 900px;
+}
+
+.calendar-modal-title {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 26px;
+}
+
+.calendar-modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 14px;
+    margin-top: 15px;
+    margin-bottom: 40px;
+}
+
+    .calendar-modal-meta .left {
+        margin-right: 85px;
+    }
+
+    .calendar-modal-meta .item {
+        margin-bottom: 10px;
+    }
+
+        .calendar-modal-meta .item span {
+            color: #666666;
+            width: 85px;
+            display: inline-block;
+        }
+
+.calendar-modal-table {
+    margin-top: 10px;
+}
+
+    .calendar-modal-table thead {
+        background: #f1f1f1;
+    }
+
+        .calendar-modal-table thead th {
+            border: none;
+        }
+
+/* lich thi */
+
+.top-gray {
+    background: #f4f4f4;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.top-gray-wrapper {
+    display: flex;
+    width: 100%;
+    padding: 15px;
+    align-items: center;
+}
+
+    .top-gray-wrapper label {
+        flex-shrink: 0;
+        font-size: 14px;
+        margin-right: 15px;
+        width: 60px;
+    }
+
+    .top-gray-wrapper .form-group {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        max-width: 375px;
+    }
+
+        .top-gray-wrapper .form-group .form-item {
+            width: 100%;
+            margin-right: 15px;
+        }
+
+.no-icon .form-select {
+    padding-left: 15px;
+}
+
+.calendar-top {
+    display: flex;
+    padding: 20px 15px 10px 15px;
+}
+
+    .calendar-top .left {
+        flex: 1;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .calendar-top .right {
+        padding: 0 5px;
+        display: flex;
+        align-items: flex-end;
+        margin-bottom: 10px;
+    }
+
+        .calendar-top .right .btn {
+            min-width: auto;
+        }
+
+    .calendar-top .form-item {
+        padding: 0 5px;
+        margin-bottom: 10px;
+    }
+
+    .calendar-top .form-group-cover {
+        padding: 0 0 0 5px;
+    }
+
+        .calendar-top .form-group-cover .main-label {
+            flex-shrink: 0;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #222222;
+        }
+
+    .calendar-top .date-input {
+        position: relative;
+        padding: 0 5px;
+    }
+
+        .calendar-top .date-input .form-control {
+            max-width: 185px;
+            height: 35px;
+            margin-bottom: 10px;
+            padding-left: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .calendar-top .date-input label {
+            position: absolute;
+            right: 17px;
+            top: 8px;
+        }
+
+.khoa-sldl {
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+}
+
+    .khoa-sldl .wrp {
+        padding: 15px;
+        margin-top: 30px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .khoa-sldl label {
+        width: auto;
+        flex-shrink: 0;
+    }
+
+    .khoa-sldl .form-item {
+        flex: 1;
+        max-width: 600px;
+    }

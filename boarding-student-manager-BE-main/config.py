@@ -3,6 +3,8 @@ import mysql.connector
 from dotenv import load_dotenv
 
 # Tải các biến môi trường từ file .env
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
 load_dotenv()
 
 def get_db_connection():

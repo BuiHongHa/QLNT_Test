@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Backups
+.git_fe_backup/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

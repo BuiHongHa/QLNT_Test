@@ -1,0 +1,18 @@
+.plan .btn {
+    font-size: 14px;
+    line-height: 15px;
+    padding: 8px 20px 7px;
+    margin-left: 10px;
+    margin-top: -3px;
+}
+
+.kqpk-input {
+    max-width: 220px;
+    height: 30px;
+    padding: 5px 15px;
+    font-size: 14px;
+}
+
+.register-wish .table.has-form td {
+    padding: 5px 0.5rem;
+}

@@ -1,0 +1,111 @@
+/* App-level styles — project-specific only */
+/* Vite template CSS removed to prevent conflicts */
+
+:root {
+  --primary-color: #00206d;
+  --secondary-color: #f8faff;
+  --text-main: #334155;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --bg-color: #f1f5f9;
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 10px 25px rgba(0, 0, 0, 0.08);
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+  --transition: all 0.25s ease-in-out;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  color: var(--text-main);
+  background-color: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Soften all cards/panels */
+.bg-white, .card {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-soft) !important;
+  border: none !important;
+  transition: var(--transition);
+}
+
+/* Soften tables */
+.table {
+  color: var(--text-main);
+}
+.table thead th {
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-color);
+  color: #fff;
+  background-color: var(--primary-color) !important;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+}
+.table-hover tbody tr:hover {
+  background-color: var(--secondary-color);
+}
+.table td, .table th {
+  padding: 1rem 1.25rem;
+  vertical-align: middle;
+}
+
+/* Soften buttons */
+.btn {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  transition: var(--transition);
+  box-shadow: none !important;
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+.btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+.btn-primary:hover {
+  background-color: #001854;
+  border-color: #001854;
+}
+
+/* Soften form controls */
+.form-control, .form-select {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 1rem;
+  color: var(--text-main);
+  transition: var(--transition);
+}
+.form-control:focus, .form-select:focus {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(0, 32, 109, 0.1);
+}
+
+/* Modal styling */
+.modal-content {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+.modal-header {
+  border-bottom: 1px solid var(--border-color);
+  background-color: #fff;
+  padding: 1.25rem 1.5rem;
+}
+.modal-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 1.25rem 1.5rem;
+}
+
+/* Badges */
+.badge {
+  padding: 0.45em 0.75em;
+  border-radius: 20px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}

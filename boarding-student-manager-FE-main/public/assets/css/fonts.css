@@ -1,0 +1,50 @@
+/* cyrillic-ext */
+
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 400;
+    font-display: swap;
+    src: url(../fonts/Roboto-Regular.ttf ) format('true type font');
+}
+
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 500;
+    font-display: swap;
+    src: url(../fonts/Roboto-Medium.ttf ) format('true type font');
+}
+
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 700;
+    font-display: swap;
+    src: url(../fonts/Roboto-Bold.ttf ) format('true type font');
+}
+
+@font-face {
+    font-family: 'Roboto';
+    font-weight: 800;
+    font-display: swap;
+    src: url(../fonts/Roboto-Black.ttf ) format('true type font');
+}
+
+@font-face {
+    font-family: 'montserrat';
+    font-weight: 400;
+    font-display: swap;
+    src: url(../fonts/Montserrat-Regular.otf );
+}
+
+@font-face {
+    font-family: 'montserrat';
+    font-weight: 700;
+    font-display: swap;
+    src: url(../fonts/Montserrat-Bold.otf );
+}
+
+@font-face {
+    font-family: 'montserrat';
+    font-weight: 800;
+    font-display: swap;
+    src: url(../fonts/Montserrat-ExtraBold.otf );
+}

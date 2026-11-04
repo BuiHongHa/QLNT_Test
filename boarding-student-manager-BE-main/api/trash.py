@@ -98,3 +98,80 @@ def hard_delete_item(item_type, id):
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
+@trash_bp.route('/<string:item_type>/bulk-restore', methods=['POST'])
+def bulk_restore_items(item_type):
+    try:
+        data = request.get_json() or {}
+        ids = data.get('ids', [])
+        if not ids:
+            return jsonify({"success": False, "message": "Không có mục nào được chọn"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholders = ','.join(['%s'] * len(ids))
+
+        if item_type == 'students':
+            cursor.execute(f"UPDATE tstudent SET is_active = 1 WHERE id_VNeID IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE taccount SET is_active = 1 WHERE username IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE study SET is_active = 1 WHERE id_student IN ({placeholders})", ids)
+        elif item_type == 'teachers':
+            cursor.execute(f"UPDATE tteacher SET is_active = 1 WHERE id_VNeID IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE taccount SET is_active = 1 WHERE username IN ({placeholders})", ids)
+        elif item_type == 'rooms':
+            cursor.execute(f"UPDATE tdormroom SET is_active = 1 WHERE id IN ({placeholders})", ids)
+        else:
+            return jsonify({"success": False, "message": "Loại dữ liệu không hợp lệ"}), 400
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": f"Đã khôi phục {len(ids)} mục thành công"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@trash_bp.route('/<string:item_type>/bulk-hard', methods=['POST'])
+def bulk_hard_delete_items(item_type):
+    try:
+        data = request.get_json() or {}
+        ids = data.get('ids', [])
+        if not ids:
+            return jsonify({"success": False, "message": "Không có mục nào được chọn"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholders = ','.join(['%s'] * len(ids))
+
+        if item_type == 'students':
+            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tinspectionviolation WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tmealattendance WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tleaverequest WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM living WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM study WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tparent WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tstudent WHERE id_VNeID IN ({placeholders})", ids)
+        elif item_type == 'teachers':
+            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_teacher IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomadminrequest WHERE id_teacher IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM manage WHERE id_teacher IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tteacher WHERE id_VNeID IN ({placeholders})", ids)
+        elif item_type == 'rooms':
+            cursor.execute(f"UPDATE tcamera SET id_room = NULL WHERE id_room IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troominspection WHERE id_dormroom IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_dormroom IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomadminrequest WHERE id_dormroom IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM living WHERE id_dormroom IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tdormroom WHERE id IN ({placeholders})", ids)
+        else:
+            return jsonify({"success": False, "message": "Loại dữ liệu không hợp lệ"}), 400
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": f"Đã xoá vĩnh viễn {len(ids)} mục khỏi cơ sở dữ liệu MySQL"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500

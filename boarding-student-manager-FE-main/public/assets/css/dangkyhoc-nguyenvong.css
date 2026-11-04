@@ -1,0 +1,202 @@
+.register-wish .text-lable {
+    width: 25%;
+    color: #222222;
+    text-align: left;
+    padding-top: 0;
+    line-height: 19px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.btn-dask-blue {
+    background-color: var(--dask-blue);
+    color: white;
+}
+
+.btn-dask-blue:hover {
+    background-color: #112358;
+    color: white;
+}
+
+.title-under-line {
+    border-bottom: solid 1px #e1e1e1;
+    padding-bottom: 10px;
+}
+
+.title-under-line span {
+    position: relative;
+}
+
+.title-under-line span::after {
+    content: "";
+    width: 100%;
+    height: 3px;
+    background-color: var(--dask-blue);
+    position: absolute;
+    bottom: -14px;
+    left: 0;
+}
+
+.register-wish .btn {
+    min-width: 200px;
+}
+
+.register-wish {
+    margin: 20px;
+    padding-top: 25px;
+    padding-bottom: 25px;
+}
+
+.register-wish .table {
+    border: solid 1px #e1e1e1;
+}
+
+.register-wish .table th,
+.register-wish .table td {
+    padding: 12px 0.5rem;
+    vertical-align: middle;
+}
+
+.register-wish thead th {
+    background-color: #f4f4f4;
+    border-bottom: none;
+}
+
+
+/* Đăng ký phúc khảo */
+
+.dk-phuckhao {
+    padding: 0 20px;
+}
+
+.dk-phuckhao .table-w {
+    overflow-x: scroll;
+}
+
+.dk-phuckhao .table-w .table {
+    width: 2000px;
+}
+
+.dk-phuckhao .table-w .table th {
+    background: #e4e4e4;
+    height: 45px;
+}
+
+.dk-phuckhao .table-w .table th:last-child {
+    position: sticky;
+    right: 0;
+}
+
+.dk-phuckhao .table-w .table th,
+.dk-phuckhao .table-w .table td.has-border {
+    border-right: solid 1px #d1d1d1;
+}
+
+.dk-phuckhao .table-w .table {
+    position: relative;
+}
+
+.dk-phuckhao .table-w .table .label td {
+    background: #f4f4f4;
+    line-height: 18px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-weight: bold;
+    height: 45px;
+}
+
+.dk-phuckhao .table-w .table td {
+    padding: 5px 0.5rem;
+}
+
+.dk-phuckhao .table-w .table tr td:last-child {
+    position: relative;
+    position: sticky;
+    right: 0;
+}
+
+.dk-phuckhao .table-w .table .status {
+    color: white;
+    padding: 5px;
+    border-radius: 4px;
+    margin-left: 10px;
+    width: 75px;
+    height: 30px;
+}
+
+.dk-phuckhao .table-w .table .status.dadong {
+    background: #28a745;
+}
+
+.dk-phuckhao .table-w::-webkit-scrollbar {
+    height: 8px;
+}
+
+
+/* Track */
+
+.dk-phuckhao .table-w::-webkit-scrollbar-track {
+    background: #e4e4e4;
+}
+
+
+/* Handle */
+
+.dk-phuckhao .table-w::-webkit-scrollbar-thumb {
+    background: #cecece;
+    border-radius: 10px;
+}
+
+
+/* .dk-phuckhao .table-w .table::after {
+    content: "";
+    position: absolute;
+    background: #1b3276;
+    width: 80px;
+    height: calc(100% + 1px);
+    right: 0;
+    top: -1px;
+} */
+
+.dk-phuckhao .table-w .table .is-fixed {
+    position: absolute;
+    z-index: 1;
+    width: 80px;
+    top: 0;
+    right: -1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: normal;
+    color: white;
+    height: calc(100% + 1px);
+    border-bottom: solid 1px #43568c;
+    background: #1b3276;
+}
+
+.dk-phuckhao .table-w .table th .is-fixed {
+    height: 93px
+}
+
+.dk-phuckhao .table-w .table a.is-fixed:hover {
+    background: var(--orange);
+}
+
+.has-icon {
+    position: relative;
+}
+
+.has-icon .end-icon {
+    right: 10px;
+    position: absolute;
+    left: auto;
+}
+
+.has-icon .form-control {
+    padding-right: 30px;
+}
+
+.dk-phuckhao .table-w .table .label td:last-child {
+    position: unset;
+}

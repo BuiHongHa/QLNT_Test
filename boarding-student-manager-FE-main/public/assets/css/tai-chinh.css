@@ -1,0 +1,147 @@
+.finance-user-info {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 15px;
+    align-items: center;
+}
+
+.finance-user-info p {
+    margin-right: 30px;
+}
+
+.finance-startus {
+    background-color: red;
+    font-size: 14px;
+    color: white;
+    padding: 8px 15px 6px;
+    line-height: 14px;
+    border-radius: 4px;
+    position: relative;
+}
+
+.finance-startus::before {
+    content: "";
+    position: absolute;
+    content: "";
+    position: absolute;
+    border-left: 10px solid red;
+    border-top: 10px solid transparent;
+    border-top: 10px solid transparent;
+    left: -5px;
+    transform: rotate(45deg);
+    top: calc(50% - 5px);
+}
+
+.finance-startus.complate {
+    background-color: #28a745;
+}
+
+.finance-startus.complate::before {
+    border-color: #28a745;
+}
+
+.finance-startus.debt {
+    background-color: #e80002;
+}
+
+.finance-startus.debt::before {
+    border-color: #e80002;
+}
+
+.finance-startus.residual {
+    background-color: #223771;
+}
+
+.finance-startus.residual::before {
+    border-color: #223771;
+}
+
+.finance-dashboard {
+    padding: 20px;
+}
+
+.finance-dashboard-item {
+    background-color: white;
+    display: flex;
+    justify-content: space-between;
+    border-right: solid 4px;
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+    padding: 20px;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.finance-dashboard-item p {
+    margin-bottom: 0;
+}
+
+.finance-dashboard-item .amount {
+    font-size: 24px;
+    font-weight: bold;
+    line-height: 17px;
+}
+
+.finance-dashboard-item .amount span {
+    font-size: 14px;
+    font-style: italic;
+    font-weight: normal;
+}
+
+.finance-dashboard-item .label {
+    font-size: 15px;
+    line-height: 17px;
+}
+
+.finance-dashboard-item button {
+    font-size: 14px;
+    padding: 5px 20px;
+    border-radius: 4px;
+    border: solid 1px;
+    background-color: transparent;
+    margin-top: 5px;
+    color: #223771;
+}
+
+.finance-dashboard-item button i {
+    margin-left: 10px;
+}
+
+.finance-dashboard-item button:hover {
+    color: var(--orange);
+}
+
+.finance-user-info.in-modal {
+    margin-top: 0;
+}
+
+.finance-user-info.in-modal p {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.finance-modal .modal-content {
+    min-height: 440px;
+}
+
+.finace-total {
+    background-color: #e1e1e1;
+}
+
+.nav-content-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-right: 10px;
+    padding-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.nav-content-right .btn {
+    border-color: #acbeec;
+    font-size: 14px;
+}
+
+.nav-content-right .fa-question-circle {
+    color: var(--dask-blue);
+}

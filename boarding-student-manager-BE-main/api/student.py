@@ -267,7 +267,7 @@ def get_students():
         
         where_clause = "WHERE s.is_active = 1"
         params = []
-        if teacher_id:
+        if teacher_id and teacher_id.lower() != 'admin':
             where_clause += """ AND st.id_class IN (
                 SELECT c.id FROM tClass c
                 JOIN MANAGE m ON c.id = m.id_class
@@ -301,7 +301,7 @@ def get_all_classes():
         
         sql = "SELECT DISTINCT name FROM tClass WHERE is_active = 1"
         params = []
-        if teacher_id:
+        if teacher_id and teacher_id.lower() != 'admin':
             sql = """SELECT DISTINCT c.name FROM tClass c
                      JOIN MANAGE m ON c.id = m.id_class
                      WHERE c.is_active = 1 AND m.id_teacher = %s AND m.is_active = 1"""
@@ -523,18 +523,60 @@ def update_student(id_vneid):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@student_bp.route('/bulk-delete', methods=['POST'])
+def bulk_delete_students():
+    try:
+        data = request.get_json() or {}
+        ids = data.get('ids', [])
+        hard_delete = data.get('hard_delete', False)
+
+        if not ids:
+            return jsonify({"success": False, "message": "Không có học sinh nào được chọn"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholders = ','.join(['%s'] * len(ids))
+
+        if hard_delete:
+            # Xóa cứng - Xóa hoàn toàn khỏi database MySQL
+            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tinspectionviolation WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tmealattendance WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tleaverequest WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM living WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM study WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tparent WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"DELETE FROM tstudent WHERE id_VNeID IN ({placeholders})", ids)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({"success": True, "message": f"Đã xoá vĩnh viễn {len(ids)} học sinh khỏi cơ sở dữ liệu MySQL"})
+        else:
+            # Xóa mềm - Vô hiệu hóa (is_active = 0) và đưa vào Thùng rác
+            cursor.execute(f"UPDATE tStudent SET is_active = 0 WHERE id_VNeID IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE tAccount SET is_active = 0 WHERE username IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE STUDY SET is_active = 0 WHERE id_student IN ({placeholders})", ids)
+            cursor.execute(f"UPDATE LIVING SET is_active = 0 WHERE id_student IN ({placeholders})", ids)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({"success": True, "message": f"Đã vô hiệu hoá {len(ids)} học sinh thành công (đã chuyển vào Thùng rác)"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @student_bp.route('/<id_vneid>', methods=['DELETE'])
 def delete_student(id_vneid):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE tStudent SET is_active = 0 WHERE id_VNeID = %s", (id_vneid,))
+        cursor.execute("UPDATE tAccount SET is_active = 0 WHERE username = %s", (id_vneid,))
+        cursor.execute("UPDATE STUDY SET is_active = 0 WHERE id_student = %s", (id_vneid,))
+        cursor.execute("UPDATE LIVING SET is_active = 0 WHERE id_student = %s", (id_vneid,))
         conn.commit()
-        affected = cursor.rowcount
         cursor.close()
         conn.close()
-        if affected == 0:
-            return jsonify({"success": False, "message": "Student not found"}), 404
         return jsonify({"success": True, "message": "Student soft deleted successfully"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
