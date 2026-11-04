@@ -1,0 +1,8 @@
+flask
+flask-cors
+mysql-connector-python
+python-dotenv
+Flask-JWT-Extended
+opencv-python
+pyzbar
+openpyxl

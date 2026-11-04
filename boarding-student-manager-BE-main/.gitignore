@@ -1,0 +1,8 @@
+# Môi trường ảo (Virtual Environment)
+venv/
+env/
+__pycache__/
+*.log
+
+# Biến môi trường
+.env

@@ -1,0 +1,625 @@
+from flask import Blueprint, request, jsonify
+from config import get_db_connection
+from datetime import datetime, date, time, timedelta
+from mock_time import get_today, get_now
+from excel_utils import generate_excel_response
+
+meal_bp = Blueprint('meal', __name__)
+
+def normalize_role(role_name):
+    return (role_name or '').strip().lower()
+
+def leave_effective_status(leave_row):
+    teacher_accept = (leave_row.get('teacher_accept') or 'PENDING').strip().upper()
+    manager_accept = (leave_row.get('manager_accept') or 'PENDING').strip().upper()
+    dorm_manager_accept = (leave_row.get('dorm_manager_accept') or 'PENDING').strip().upper()
+    leave_type = leave_row.get('leave_type')
+
+    if leave_type == 'AFTER_SCHOOL':
+        return 'ACCEPTED' if dorm_manager_accept == 'ACCEPTED' else 'DENIED' if dorm_manager_accept == 'DENIED' else 'PENDING'
+    if leave_type == 'EMERGENCY':
+        return 'ACCEPTED' if manager_accept == 'ACCEPTED' else 'DENIED' if manager_accept == 'DENIED' else 'PENDING'
+    if leave_type == 'REGULAR_WEEKEND':
+        if teacher_accept == 'DENIED' or manager_accept == 'DENIED':
+            return 'DENIED'
+        if teacher_accept == 'ACCEPTED' and manager_accept == 'ACCEPTED':
+            return 'ACCEPTED'
+        return 'PENDING'
+    if teacher_accept == 'DENIED' or manager_accept == 'DENIED' or dorm_manager_accept == 'DENIED':
+        return 'DENIED'
+    if teacher_accept == 'ACCEPTED' and manager_accept == 'ACCEPTED':
+        return 'ACCEPTED'
+    return 'PENDING'
+
+def ensure_meal_schema(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tMealAttendance (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            meal_date DATE NOT NULL,
+            meal_type VARCHAR(10) NOT NULL,
+            id_student CHAR(12) NOT NULL,
+            is_cut INT NOT NULL DEFAULT 0,
+            reason_leave_id INT NULL,
+            note NVARCHAR(255),
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_meal_student (meal_date, meal_type, id_student),
+            FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID)
+        )
+    """)
+    for column_sql in (
+        "ALTER TABLE tLeaveRequest ADD COLUMN teacher_accept VARCHAR(20) NOT NULL DEFAULT 'PENDING'",
+        "ALTER TABLE tLeaveRequest ADD COLUMN manager_accept VARCHAR(20) NOT NULL DEFAULT 'PENDING'",
+        "ALTER TABLE tLeaveRequest ADD COLUMN dorm_manager_accept VARCHAR(20) NOT NULL DEFAULT 'PENDING'",
+        "ALTER TABLE tLeaveRequest ADD COLUMN is_active INT DEFAULT 1",
+    ):
+        try:
+            cursor.execute(column_sql)
+        except Exception:
+            pass
+
+def parse_date(value):
+    if not value:
+        return get_today()
+    return datetime.strptime(value, '%Y-%m-%d').date()
+
+def parse_month(value):
+    if not value:
+        today = get_today()
+        return today.year, today.month
+    parsed = datetime.strptime(value, '%Y-%m')
+    return parsed.year, parsed.month
+
+def month_bounds(year, month):
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(year, month + 1, 1) - timedelta(days=1)
+    return start, end
+
+def meal_datetime(meal_date, meal_type):
+    return datetime.combine(meal_date, time(11, 30) if meal_type == 'LUNCH' else time(18, 0))
+
+def load_students(cursor, role_name, username, class_name=None):
+    where = "WHERE s.is_active = 1"
+    params = []
+    if role_name == 'student':
+        where += " AND s.id_VNeID = %s"
+        params.append(username)
+    elif role_name == 'teacher':
+        where += """
+          AND EXISTS (
+              SELECT 1
+              FROM MANAGE m
+              JOIN tClass managed_class ON m.id_class = managed_class.id AND managed_class.is_active = 1
+              WHERE m.id_teacher = %s
+                AND m.is_active = 1
+                AND managed_class.id = st.id_class
+          )
+        """
+        params.append(username)
+        if class_name:
+            where += " AND c.name = %s"
+            params.append(class_name)
+    elif class_name:
+        where += " AND c.name = %s"
+        params.append(class_name)
+
+    cursor.execute(f"""
+        SELECT s.id_VNeID, s.name, c.name AS class_name
+        FROM tStudent s
+        LEFT JOIN STUDY st ON s.id_VNeID = st.id_student AND st.is_active = 1
+        LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
+        {where}
+        ORDER BY c.name, s.name
+    """, params)
+    return cursor.fetchall()
+
+def load_leaves(cursor, student_ids, start_day, end_day):
+    if not student_ids:
+        return []
+    placeholders = ','.join(['%s'] * len(student_ids))
+    cursor.execute(f"""
+        SELECT c.*, p.decided_at AS parent_decided_at
+        FROM tLeaveRequest c
+        LEFT JOIN tLeaveRequest p ON c.recurring_parent_id = p.id
+        WHERE c.id_student IN ({placeholders})
+          AND c.is_active = 1
+          AND (c.leave_type <> 'REGULAR_WEEKEND' OR c.recurring_parent_id IS NOT NULL)
+          AND c.start_time <= %s
+          AND c.end_time >= %s
+    """, student_ids + [
+        datetime.combine(end_day, time(23, 59, 59)),
+        datetime.combine(start_day, time.min)
+    ])
+    return cursor.fetchall()
+
+def leave_cuts_meal(leave_row, meal_dt, meal_type=None):
+    status = leave_effective_status(leave_row)
+    if status != 'ACCEPTED':
+        return False
+
+    start_time = leave_row['start_time']
+    end_time = leave_row['end_time']
+    leave_type = leave_row.get('leave_type')
+
+    approval_time = leave_row.get('decided_at') or leave_row.get('parent_decided_at') or leave_row.get('created_at')
+    if not approval_time:
+        approval_time = leave_row.get('created_at')
+
+    if not meal_type:
+        meal_type = 'LUNCH' if meal_dt.time() < time(14, 0) else 'DINNER'
+
+    meal_day = meal_dt.date()
+
+    if leave_type == 'AFTER_SCHOOL':
+        # Đơn ra ngoài sau giờ học: Không cắt cơm
+        return False
+
+    elif leave_type == 'REGULAR_WEEKEND':
+        friday = start_time.date()
+        saturday = friday + timedelta(days=1)
+        sunday = friday + timedelta(days=2)
+
+        sat_noon = datetime.combine(saturday, time(12, 0))
+
+        if meal_day == saturday:
+            if meal_type == 'DINNER':
+                return approval_time <= sat_noon
+            return False  # Saturday lunch is never cut
+        elif meal_day == sunday:
+            if meal_type in ('LUNCH', 'DINNER'):
+                return True
+            return False
+        else:
+            return False
+
+    else:
+        # EMERGENCY and other leaves
+        if not (start_time <= meal_dt <= end_time):
+            return False
+
+        approval_date = approval_time.date()
+        noon = datetime.combine(approval_date, time(12, 0))
+
+        if approval_time <= noon:
+            cut_start = datetime.combine(approval_date, time(11, 30))
+        else:
+            cut_start = datetime.combine(approval_date, time(18, 0))
+
+        return meal_dt >= cut_start
+
+def get_meal_cut_state(leaves, meal_dt, meal_type=None):
+    for leave in leaves:
+        if leave_cuts_meal(leave, meal_dt, meal_type):
+            return True, leave['id']
+    return False, None
+
+def is_student_outside(student_logs, meal_dt):
+    if meal_dt > get_now():
+        return False
+    last_log = None
+    for log in student_logs:
+        if log['access_time'] <= meal_dt:
+            last_log = log
+        else:
+            break
+    return last_log is not None and last_log['type'] == 'OUT'
+
+def sync_students_meal_attendance(cursor, student_ids, start_day, end_day):
+    if not student_ids:
+        return
+
+    # 1. Load leaves
+    leaves = load_leaves(cursor, student_ids, start_day, end_day)
+    leaves_by_student = {student_id: [] for student_id in student_ids}
+    for leave in leaves:
+        leaves_by_student.setdefault(leave['id_student'], []).append(leave)
+
+    # 2. Load access logs
+    start_dt = datetime.combine(start_day, time.min)
+    end_dt = datetime.combine(end_day, time.max)
+    placeholders = ','.join(['%s'] * len(student_ids))
+
+    # 2.1 Get latest log before start_dt for each student
+    cursor.execute(f"""
+        SELECT a.id_student, a.type, a.access_time
+        FROM tAccessLog a
+        INNER JOIN (
+            SELECT id_student, MAX(access_time) as max_time
+            FROM tAccessLog
+            WHERE access_time < %s 
+              AND type IN ('IN', 'OUT') 
+              AND id_student IN ({placeholders})
+            GROUP BY id_student
+        ) latest ON a.id_student = latest.id_student AND a.access_time = latest.max_time
+        WHERE a.type IN ('IN', 'OUT')
+    """, [start_dt] + student_ids)
+    initial_rows = cursor.fetchall()
+
+    logs_by_student = {student_id: [] for student_id in student_ids}
+    for r in initial_rows:
+        student_id = r['id_student']
+        if not logs_by_student[student_id]:
+            logs_by_student[student_id].append(r)
+        else:
+            existing = logs_by_student[student_id][0]
+            if r['access_time'] > existing['access_time']:
+                logs_by_student[student_id][0] = r
+
+    # 2.2 Get all logs within start_dt and end_dt
+    cursor.execute(f"""
+        SELECT id_student, type, access_time
+        FROM tAccessLog
+        WHERE id_student IN ({placeholders})
+          AND type IN ('IN', 'OUT')
+          AND access_time BETWEEN %s AND %s
+        ORDER BY access_time ASC, id ASC
+    """, student_ids + [start_dt, end_dt])
+    interval_rows = cursor.fetchall()
+
+    for r in interval_rows:
+        logs_by_student.setdefault(r['id_student'], []).append(r)
+
+    # 3. Process day-by-day and meal-by-meal
+    days = []
+    current = start_day
+    while current <= end_day:
+        days.append(current)
+        current += timedelta(days=1)
+
+    for day in days:
+        for student_id in student_ids:
+            student_leaves = leaves_by_student.get(student_id, [])
+            student_logs = logs_by_student.get(student_id, [])
+
+            for meal_type in ('LUNCH', 'DINNER'):
+                meal_dt = meal_datetime(day, meal_type)
+
+                is_cut_by_leave, reason_leave_id = get_meal_cut_state(student_leaves, meal_dt, meal_type)
+                is_cut_by_access = is_student_outside(student_logs, meal_dt)
+
+                is_cut = is_cut_by_leave or is_cut_by_access
+
+                note = None
+                if is_cut_by_leave:
+                    note = "Cắt cơm theo đơn nghỉ phép"
+                elif is_cut_by_access:
+                    covering_leave_id = None
+                    for leave in student_leaves:
+                        if leave['start_time'] <= meal_dt <= leave['end_time'] and leave_effective_status(leave) == 'ACCEPTED':
+                            covering_leave_id = leave['id']
+                            break
+                    if covering_leave_id:
+                        reason_leave_id = covering_leave_id
+                        note = "Cắt cơm theo lịch sử ra vào (có đơn phép)"
+                    else:
+                        note = "Cắt cơm theo lịch sử ra vào (ở ngoài trường)"
+
+                cursor.execute("""
+                    INSERT INTO tMealAttendance (meal_date, meal_type, id_student, is_cut, reason_leave_id, note)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        is_cut = VALUES(is_cut),
+                        reason_leave_id = VALUES(reason_leave_id),
+                        note = VALUES(note)
+                """, (day, meal_type, student_id, int(is_cut), reason_leave_id, note))
+
+def sync_meal_attendance(cursor, start_day, end_day, role_name, username, class_name=None):
+    if end_day < start_day:
+        return [], []
+
+    students = load_students(cursor, role_name, username, class_name)
+    student_ids = [student['id_VNeID'] for student in students]
+
+    sync_students_meal_attendance(cursor, student_ids, start_day, end_day)
+
+    days = []
+    current = start_day
+    while current <= end_day:
+        days.append(current)
+        current += timedelta(days=1)
+
+    return students, days
+
+@meal_bp.route('/attendance', methods=['GET'])
+def get_meal_attendance():
+    username = request.args.get('username')
+    role_name = normalize_role(request.args.get('role_name'))
+    meal_date = parse_date(request.args.get('date'))
+
+    if role_name not in {'student', 'teacher', 'manager', 'canteen_manager'}:
+        return jsonify({"success": False, "message": "Không có quyền truy cập"}), 403
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        ensure_meal_schema(cursor)
+
+        students = load_students(cursor, role_name, username)
+        student_ids = [student['id_VNeID'] for student in students]
+
+        sync_students_meal_attendance(cursor, student_ids, meal_date, meal_date)
+        conn.commit()
+
+        if not student_ids:
+            rows = []
+        else:
+            placeholders = ','.join(['%s'] * len(student_ids))
+            cursor.execute(f"""
+            SELECT s.id_VNeID, s.name, c.name AS class_name,
+                   lunch.is_cut AS lunch_cut, lunch.note AS lunch_note, lunch.reason_leave_id AS lunch_reason_leave_id,
+                   dinner.is_cut AS dinner_cut, dinner.note AS dinner_note, dinner.reason_leave_id AS dinner_reason_leave_id
+            FROM tStudent s
+            LEFT JOIN STUDY st ON s.id_VNeID = st.id_student AND st.is_active = 1
+            LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
+            LEFT JOIN tMealAttendance lunch
+              ON lunch.id_student = s.id_VNeID AND lunch.meal_date = %s AND lunch.meal_type = 'LUNCH'
+            LEFT JOIN tMealAttendance dinner
+              ON dinner.id_student = s.id_VNeID AND dinner.meal_date = %s AND dinner.meal_type = 'DINNER'
+            WHERE s.is_active = 1 AND s.id_VNeID IN ({placeholders})
+            ORDER BY c.name, s.name
+        """, [meal_date, meal_date] + student_ids)
+            rows = cursor.fetchall()
+
+            for r in rows:
+                r['lunch_cut'] = bool(r['lunch_cut'])
+                r['dinner_cut'] = bool(r['dinner_cut'])
+
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": rows})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@meal_bp.route('/monthly', methods=['GET'])
+def get_monthly_meal_attendance():
+    username = request.args.get('username')
+    role_name = normalize_role(request.args.get('role_name'))
+    class_name = request.args.get('class_name')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if role_name not in {'student', 'teacher', 'manager', 'canteen_manager'}:
+        return jsonify({"success": False, "message": "Không có quyền truy cập"}), 403
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        ensure_meal_schema(cursor)
+
+        if start_date_str and end_date_str:
+            start_day = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_day = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        else:
+            year, month = parse_month(request.args.get('month'))
+            start_day, end_day = month_bounds(year, month)
+
+        students, synced_days = sync_meal_attendance(cursor, start_day, end_day, role_name, username, class_name)
+        conn.commit()
+
+        days = []
+        current = start_day
+        while current <= end_day:
+            days.append(current.strftime('%Y-%m-%d'))
+            current += timedelta(days=1)
+
+        student_ids = [student['id_VNeID'] for student in students]
+        attendance = {student_id: {} for student_id in student_ids}
+        if student_ids:
+            placeholders = ','.join(['%s'] * len(student_ids))
+            cursor.execute(f"""
+                SELECT meal_date, meal_type, id_student, is_cut, note
+                FROM tMealAttendance
+                WHERE id_student IN ({placeholders})
+                  AND meal_date BETWEEN %s AND %s
+            """, student_ids + [start_day, end_day])
+            for row in cursor.fetchall():
+                day_data = attendance.setdefault(row['id_student'], {}).setdefault(
+                    row['meal_date'].strftime('%Y-%m-%d'),
+                    {
+                        'lunch_cut': False, 'lunch_note': None,
+                        'dinner_cut': False, 'dinner_note': None
+                    }
+                )
+                day_data[f"{row['meal_type'].lower()}_cut"] = bool(row['is_cut'])
+                day_data[f"{row['meal_type'].lower()}_note"] = row['note']
+
+        rows = []
+        for student in students:
+            meals = {}
+            for day_text in days:
+                meals[day_text] = attendance.get(student['id_VNeID'], {}).get(day_text, {
+                    'lunch_cut': False, 'lunch_note': None,
+                    'dinner_cut': False, 'dinner_note': None
+                })
+            rows.append({**student, "meals": meals})
+
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": {"days": days, "students": rows}})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@meal_bp.route('/update', methods=['POST'])
+def update_meal_attendance():
+    data = request.json or {}
+    role_name = normalize_role(data.get('role_name'))
+    username = (data.get('username') or '').strip()
+
+    student_id = data.get('student_id')
+    meal_date_str = data.get('meal_date')
+    meal_type = data.get('meal_type')
+    is_cut_val = data.get('is_cut')  # boolean (True: cắt cơm, False: có ăn cơm)
+
+    if not meal_date_str or not meal_type or is_cut_val is None:
+        return jsonify({"success": False, "message": "Thiếu thông tin bắt buộc"}), 400
+
+    if meal_type not in {'LUNCH', 'DINNER'}:
+        return jsonify({"success": False, "message": "Loại bữa ăn không hợp lệ"}), 400
+
+    try:
+        meal_date = datetime.strptime(meal_date_str, '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({"success": False, "message": "Định dạng ngày không hợp lệ (YYYY-MM-DD)"}), 400
+
+    if role_name not in {'student', 'teacher', 'manager', 'canteen_manager'}:
+        return jsonify({"success": False, "message": "Không có quyền thực hiện hành động này"}), 403
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Xác định student_id theo quyền hạn
+        if role_name == 'student':
+            student_id = username
+        else:
+            if not student_id:
+                cursor.close()
+                conn.close()
+                return jsonify({"success": False, "message": "Thiếu mã học sinh"}), 400
+
+            if role_name == 'teacher':
+                cursor.execute("""
+                    SELECT 1
+                    FROM STUDY st
+                    JOIN MANAGE m ON st.id_class = m.id_class
+                    WHERE st.id_student = %s AND m.id_teacher = %s AND st.is_active = 1 AND m.is_active = 1
+                """, (student_id, username))
+                if not cursor.fetchone():
+                    cursor.close()
+                    conn.close()
+                    return jsonify({"success": False, "message": "Bạn không quản lý học sinh này"}), 403
+
+        # Kiểm tra thời hạn: Học sinh bị ràng buộc quy tắc 2 ngày trước; Cán bộ (canteen_manager, manager, teacher) có thể điều chỉnh linh hoạt
+        if role_name == 'student':
+            meal_dt = meal_datetime(meal_date, meal_type)
+            deadline = meal_dt - timedelta(days=2)
+            now = get_now()
+            if now > deadline:
+                cursor.close()
+                conn.close()
+                return jsonify({
+                    "success": False, 
+                    "message": f"Học sinh chỉ được báo cơm trước ít nhất 2 ngày. Hạn chót là trước {deadline.strftime('%d/%m/%Y %H:%M')}"
+                }), 400
+
+        # Cập nhật trạng thái
+        note = f"Cập nhật bởi {role_name} ({username}) lúc {now.strftime('%d/%m/%Y %H:%M:%S')}"
+        cursor.execute("""
+            INSERT INTO tMealAttendance (meal_date, meal_type, id_student, is_cut, reason_leave_id, note)
+            VALUES (%s, %s, %s, %s, NULL, %s)
+            ON DUPLICATE KEY UPDATE
+                is_cut = VALUES(is_cut),
+                reason_leave_id = NULL,
+                note = VALUES(note)
+        """, (meal_date, meal_type, student_id, int(is_cut_val), note))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True, 
+            "message": "Đã cập nhật trạng thái báo cơm thành công", 
+            "data": {
+                "student_id": student_id,
+                "meal_date": meal_date_str,
+                "meal_type": meal_type,
+                "is_cut": bool(is_cut_val)
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@meal_bp.route('/export', methods=['GET'])
+def export_meal_report():
+    username = request.args.get('username')
+    role_name = normalize_role(request.args.get('role_name'))
+    class_name = request.args.get('class_name')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if role_name not in {'student', 'teacher', 'manager', 'canteen_manager'}:
+        return jsonify({"success": False, "message": "Không có quyền truy cập"}), 403
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        ensure_meal_schema(cursor)
+
+        if start_date_str and end_date_str:
+            start_day = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_day = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        else:
+            year, month = parse_month(request.args.get('month'))
+            start_day, end_day = month_bounds(year, month)
+
+        students, synced_days = sync_meal_attendance(cursor, start_day, end_day, role_name, username, class_name)
+        conn.commit()
+
+        student_ids = [student['id_VNeID'] for student in students]
+        attendance = {student_id: {} for student_id in student_ids}
+        if student_ids:
+            placeholders = ','.join(['%s'] * len(student_ids))
+            cursor.execute(f"""
+                SELECT meal_date, meal_type, id_student, is_cut, note
+                FROM tMealAttendance
+                WHERE id_student IN ({placeholders})
+                  AND meal_date BETWEEN %s AND %s
+            """, student_ids + [start_day, end_day])
+            for row in cursor.fetchall():
+                day_data = attendance.setdefault(row['id_student'], {}).setdefault(
+                    row['meal_date'].strftime('%Y-%m-%d'),
+                    {'lunch_cut': False, 'dinner_cut': False}
+                )
+                day_data[f"{row['meal_type'].lower()}_cut"] = bool(row['is_cut'])
+
+        cursor.close()
+        conn.close()
+
+        headers = [
+            "STT", "Mã định danh (VNeID)", "Họ và tên", "Lớp",
+            "Số bữa cắt trưa", "Số bữa cắt tối", "Tổng bữa cắt", "Chi tiết ngày cắt cơm"
+        ]
+
+        data_rows = []
+        for idx, student in enumerate(students, 1):
+            s_id = student['id_VNeID']
+            s_att = attendance.get(s_id, {})
+            lunch_cuts = 0
+            dinner_cuts = 0
+            cut_details = []
+
+            curr = start_day
+            while curr <= end_day:
+                d_str = curr.strftime('%Y-%m-%d')
+                day_info = s_att.get(d_str, {'lunch_cut': False, 'dinner_cut': False})
+                cuts_today = []
+                if day_info.get('lunch_cut'):
+                    lunch_cuts += 1
+                    cuts_today.append("Trưa")
+                if day_info.get('dinner_cut'):
+                    dinner_cuts += 1
+                    cuts_today.append("Tối")
+                if cuts_today:
+                    cut_details.append(f"{curr.strftime('%d/%m')}: {', '.join(cuts_today)}")
+                curr += timedelta(days=1)
+
+            total_cuts = lunch_cuts + dinner_cuts
+            data_rows.append([
+                idx,
+                s_id,
+                student.get('name', ''),
+                student.get('class_name', ''),
+                lunch_cuts,
+                dinner_cuts,
+                total_cuts,
+                "; ".join(cut_details) if cut_details else "Không có"
+            ])
+
+        filename = f"bao_cao_an_com_{start_day.strftime('%Y%m%d')}_{end_day.strftime('%Y%m%d')}.xlsx"
+        return generate_excel_response(headers, data_rows, filename, sheet_name="Báo cáo ăn cơm")
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
