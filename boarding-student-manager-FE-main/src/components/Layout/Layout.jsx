@@ -62,6 +62,8 @@ const Layout = ({ children }) => {
             }
         } else if (location.pathname === '/inspection') {
             setExpandedMenu('inspection');
+        } else if (location.pathname === '/meals') {
+            setExpandedMenu('meals');
         }
     }, [location.pathname, location.search]);
 
@@ -149,7 +151,14 @@ const Layout = ({ children }) => {
             path: '/dorm-attendance', label: 'Điểm danh phòng', icon: 'fas fa-user-check', roles: ['manager', 'admin', 'dorm_manager', 'teacher'], id: 'dorm-attendance'
         },
         { path: '/leaves', label: 'Quản lý nghỉ phép', icon: 'fas fa-calendar-check', roles: ['manager', 'admin', 'dorm_manager', 'teacher', 'student'] },
-        { path: '/meals', label: 'Chấm cơm', icon: 'fas fa-utensils', roles: ['manager', 'admin', 'canteen_manager', 'teacher', 'student'] },
+        {
+            path: '/meals', label: 'Quản lý nhà ăn', icon: 'fas fa-utensils', roles: ['manager', 'admin', 'canteen_manager', 'teacher', 'student'], hasSub: true, id: 'meals',
+            subItems: [
+                { path: '/meals?tab=attendance', label: 'Chấm cơm', icon: 'fas fa-check-circle', roles: ['manager', 'admin', 'canteen_manager', 'teacher', 'student'] },
+                { path: '/meals?tab=menu', label: 'Thực đơn tuần', icon: 'fas fa-calendar-alt', roles: ['manager', 'admin', 'canteen_manager', 'teacher', 'student'] },
+                { path: '/meals?tab=stats', label: 'Thống kê suất ăn', icon: 'fas fa-chart-pie', roles: ['manager', 'admin', 'canteen_manager'] }
+            ]
+        },
         { path: '/access', label: 'Quản lý ra vào', icon: 'fas fa-door-open', roles: ['manager', 'admin', 'dorm_manager', 'teacher'] },
         {
             path: '/inspection', label: 'Chấm điểm phòng', icon: 'fas fa-clipboard-check', roles: ['manager', 'admin', 'dorm_manager', 'teacher'], hasSub: true, id: 'inspection',
@@ -486,6 +495,15 @@ const Layout = ({ children }) => {
                 } else {
                     const defaultTab = userRoleName === 'teacher' ? 'list' : 'score';
                     return subTab === defaultTab;
+                }
+            }
+            if (location.pathname === '/meals' && sub.path.startsWith('/meals')) {
+                const tabParam = new URLSearchParams(location.search).get('tab');
+                const subTab = new URLSearchParams(sub.path.split('?')[1]).get('tab');
+                if (tabParam) {
+                    return tabParam === subTab;
+                } else {
+                    return subTab === 'attendance';
                 }
             }
             return location.pathname === sub.path;
