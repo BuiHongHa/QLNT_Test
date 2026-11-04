@@ -54,6 +54,27 @@ def restore_item(item_type, id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+def safe_delete_one(cursor, table, col, val):
+    try:
+        cursor.execute(f"DELETE FROM {table} WHERE {col} = %s", (val,))
+    except Exception as err:
+        err_msg = str(err).lower()
+        if getattr(err, 'errno', None) == 1146 or '1146' in err_msg or "doesn't exist" in err_msg:
+            return
+        raise
+
+def safe_delete_bulk(cursor, table, col, ids):
+    if not ids:
+        return
+    placeholders = ','.join(['%s'] * len(ids))
+    try:
+        cursor.execute(f"DELETE FROM {table} WHERE {col} IN ({placeholders})", ids)
+    except Exception as err:
+        err_msg = str(err).lower()
+        if getattr(err, 'errno', None) == 1146 or '1146' in err_msg or "doesn't exist" in err_msg:
+            return
+        raise
+
 @trash_bp.route('/<string:item_type>/<string:id>/hard', methods=['DELETE'])
 def hard_delete_item(item_type, id):
     try:
@@ -61,32 +82,42 @@ def hard_delete_item(item_type, id):
         cursor = conn.cursor()
         
         if item_type == 'students':
-            # Remove related records in child tables first
-            cursor.execute("DELETE FROM taccount WHERE username = %s", (id,))
-            cursor.execute("DELETE FROM tinspectionviolation WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM troomchangerequest WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM tmealattendance WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM tleaverequest WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM living WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM study WHERE id_student = %s", (id,))
-            cursor.execute("DELETE FROM tparent WHERE id_student = %s", (id,))
-            # Finally remove from main table
-            cursor.execute("DELETE FROM tstudent WHERE id_VNeID = %s", (id,))
+            for table, col in [
+                ('taccount', 'username'),
+                ('tinspectionviolation', 'id_student'),
+                ('troomchangerequest', 'id_student'),
+                ('tmealattendance', 'id_student'),
+                ('tleaverequest', 'id_student'),
+                ('living', 'id_student'),
+                ('study', 'id_student'),
+                ('tparent', 'id_student'),
+                ('tstudent', 'id_VNeID')
+            ]:
+                safe_delete_one(cursor, table, col, id)
             
         elif item_type == 'teachers':
-            cursor.execute("DELETE FROM taccount WHERE username = %s", (id,))
-            cursor.execute("DELETE FROM troomchangerequest WHERE id_teacher = %s", (id,))
-            cursor.execute("DELETE FROM troomadminrequest WHERE id_teacher = %s", (id,))
-            cursor.execute("DELETE FROM manage WHERE id_teacher = %s", (id,))
-            cursor.execute("DELETE FROM tteacher WHERE id_VNeID = %s", (id,))
+            for table, col in [
+                ('taccount', 'username'),
+                ('troomchangerequest', 'id_teacher'),
+                ('troomadminrequest', 'id_teacher'),
+                ('manage', 'id_teacher'),
+                ('tteacher', 'id_VNeID')
+            ]:
+                safe_delete_one(cursor, table, col, id)
             
         elif item_type == 'rooms':
-            cursor.execute("UPDATE tcamera SET id_room = NULL WHERE id_room = %s", (id,))
-            cursor.execute("DELETE FROM troominspection WHERE id_dormroom = %s", (id,))
-            cursor.execute("DELETE FROM troomchangerequest WHERE id_dormroom = %s", (id,))
-            cursor.execute("DELETE FROM troomadminrequest WHERE id_dormroom = %s", (id,))
-            cursor.execute("DELETE FROM living WHERE id_dormroom = %s", (id,))
-            cursor.execute("DELETE FROM tdormroom WHERE id = %s", (id,))
+            try:
+                cursor.execute("UPDATE tcamera SET id_room = NULL WHERE id_room = %s", (id,))
+            except Exception:
+                pass
+            for table, col in [
+                ('troominspection', 'id_dormroom'),
+                ('troomchangerequest', 'id_dormroom'),
+                ('troomadminrequest', 'id_dormroom'),
+                ('living', 'id_dormroom'),
+                ('tdormroom', 'id')
+            ]:
+                safe_delete_one(cursor, table, col, id)
             
         else:
             return jsonify({"success": False, "message": "Loại dữ liệu không hợp lệ"}), 400
@@ -143,28 +174,40 @@ def bulk_hard_delete_items(item_type):
         placeholders = ','.join(['%s'] * len(ids))
 
         if item_type == 'students':
-            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tinspectionviolation WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tmealattendance WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tleaverequest WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM living WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM study WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tparent WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tstudent WHERE id_VNeID IN ({placeholders})", ids)
+            for table, col in [
+                ('taccount', 'username'),
+                ('tinspectionviolation', 'id_student'),
+                ('troomchangerequest', 'id_student'),
+                ('tmealattendance', 'id_student'),
+                ('tleaverequest', 'id_student'),
+                ('living', 'id_student'),
+                ('study', 'id_student'),
+                ('tparent', 'id_student'),
+                ('tstudent', 'id_VNeID')
+            ]:
+                safe_delete_bulk(cursor, table, col, ids)
         elif item_type == 'teachers':
-            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_teacher IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomadminrequest WHERE id_teacher IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM manage WHERE id_teacher IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tteacher WHERE id_VNeID IN ({placeholders})", ids)
+            for table, col in [
+                ('taccount', 'username'),
+                ('troomchangerequest', 'id_teacher'),
+                ('troomadminrequest', 'id_teacher'),
+                ('manage', 'id_teacher'),
+                ('tteacher', 'id_VNeID')
+            ]:
+                safe_delete_bulk(cursor, table, col, ids)
         elif item_type == 'rooms':
-            cursor.execute(f"UPDATE tcamera SET id_room = NULL WHERE id_room IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troominspection WHERE id_dormroom IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_dormroom IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomadminrequest WHERE id_dormroom IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM living WHERE id_dormroom IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tdormroom WHERE id IN ({placeholders})", ids)
+            try:
+                cursor.execute(f"UPDATE tcamera SET id_room = NULL WHERE id_room IN ({placeholders})", ids)
+            except Exception:
+                pass
+            for table, col in [
+                ('troominspection', 'id_dormroom'),
+                ('troomchangerequest', 'id_dormroom'),
+                ('troomadminrequest', 'id_dormroom'),
+                ('living', 'id_dormroom'),
+                ('tdormroom', 'id')
+            ]:
+                safe_delete_bulk(cursor, table, col, ids)
         else:
             return jsonify({"success": False, "message": "Loại dữ liệu không hợp lệ"}), 400
 

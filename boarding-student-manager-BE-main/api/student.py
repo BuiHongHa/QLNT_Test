@@ -523,6 +523,18 @@ def update_student(id_vneid):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+def safe_delete_records(cursor, table, col, ids):
+    if not ids:
+        return
+    placeholders = ','.join(['%s'] * len(ids))
+    try:
+        cursor.execute(f"DELETE FROM {table} WHERE {col} IN ({placeholders})", ids)
+    except Exception as err:
+        err_msg = str(err).lower()
+        if getattr(err, 'errno', None) == 1146 or '1146' in err_msg or "doesn't exist" in err_msg:
+            return
+        raise
+
 @student_bp.route('/bulk-delete', methods=['POST'])
 def bulk_delete_students():
     try:
@@ -539,15 +551,19 @@ def bulk_delete_students():
 
         if hard_delete:
             # Xóa cứng - Xóa hoàn toàn khỏi database MySQL
-            cursor.execute(f"DELETE FROM taccount WHERE username IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tinspectionviolation WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM troomchangerequest WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tmealattendance WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tleaverequest WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM living WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM study WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tparent WHERE id_student IN ({placeholders})", ids)
-            cursor.execute(f"DELETE FROM tstudent WHERE id_VNeID IN ({placeholders})", ids)
+            for table, col in [
+                ('taccount', 'username'),
+                ('tinspectionviolation', 'id_student'),
+                ('troomchangerequest', 'id_student'),
+                ('tmealattendance', 'id_student'),
+                ('tleaverequest', 'id_student'),
+                ('living', 'id_student'),
+                ('study', 'id_student'),
+                ('tparent', 'id_student'),
+                ('tstudent', 'id_VNeID')
+            ]:
+                safe_delete_records(cursor, table, col, ids)
+
             conn.commit()
             cursor.close()
             conn.close()
