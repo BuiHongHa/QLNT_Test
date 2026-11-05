@@ -22,6 +22,26 @@ from api.dorm_attendance import dorm_attendance_bp
 
 app = Flask(__name__)
 refresh_mock_state_for_startup()
+
+def init_db_schema():
+    try:
+        from config import get_db_connection
+        from api.inspection_criteria import ensure_criteria_table
+        from api.inspection import ensure_tables as ensure_inspection_tables
+        from api.meal import ensure_meal_schema
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        ensure_criteria_table(cursor)
+        ensure_inspection_tables(cursor)
+        ensure_meal_schema(cursor)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"[Warning] Failed to init DB schema on startup: {e}")
+
+init_db_schema()
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default-fallback-secret-key')
 app.config['JWT_TOKEN_LOCATION'] = ['headers', 'cookies']
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)

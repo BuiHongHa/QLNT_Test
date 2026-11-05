@@ -15,6 +15,7 @@ import InspectionManager from './components/InspectionManager/InspectionManager'
 import DormAttendance from './components/DormAttendance/DormAttendance';
 import TrashManager from './components/TrashManager/TrashManager';
 import PromoteManager from './components/PromoteManager/PromoteManager';
+import StudentViolations from './components/StudentViolations/StudentViolations';
 import { getStoredUser, refreshAuthSession } from './config/auth';
 
 const ProtectedRoute = ({ children }) => {
@@ -65,6 +66,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/student-card" element={<ProtectedRoute><Layout><StudentCard /></Layout></ProtectedRoute>} />
+        <Route path="/violations" element={<ProtectedRoute><Layout><StudentViolations /></Layout></ProtectedRoute>} />
         <Route path="/students" element={<ProtectedRoute><Layout><StudentManager /></Layout></ProtectedRoute>} />
         <Route path="/teachers" element={<ProtectedRoute><Layout><TeacherManager /></Layout></ProtectedRoute>} />
         <Route path="/dormrooms" element={<ProtectedRoute><Layout><DormManager /></Layout></ProtectedRoute>} />

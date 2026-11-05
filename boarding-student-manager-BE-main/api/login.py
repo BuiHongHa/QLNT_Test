@@ -15,11 +15,11 @@ from flask_jwt_extended import (
 login_bp = Blueprint('login', __name__)
 
 ROLE_LABELS = {
-    'student': 'học sinh',
-    'teacher': 'giáo viên',
+    'student': 'Học sinh',
+    'teacher': 'Giáo viên',
     'manager': 'Ban Giám Hiệu',
-    'dorm_manager': 'quản lý ký túc xá',
-    'canteen_manager': 'quản lý nhà ăn',
+    'dorm_manager': 'Quản lý KTX',
+    'canteen_manager': 'Quản lý nhà ăn',
 }
 
 def normalize_role_name(role_name):

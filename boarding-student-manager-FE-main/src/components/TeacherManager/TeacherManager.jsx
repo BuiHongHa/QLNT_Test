@@ -93,9 +93,17 @@ const TeacherManager = () => {
             .catch(console.error);
     }, []);
 
+    const staffRoles = useMemo(() => {
+        return roles.filter(role => role.name !== 'student');
+    }, [roles]);
+
     const openCreateModal = () => {
         setModalMode('create');
-        setForm(emptyForm);
+        const defaultRole = roles.find(r => r.name === 'teacher')?.id || (staffRoles[0]?.id || '');
+        setForm({
+            ...emptyForm,
+            role_id: defaultRole
+        });
         setError('');
         setShowModal(true);
     };
@@ -352,7 +360,17 @@ const TeacherManager = () => {
                                     <td>{teacher.phone_number || '-'}</td>
                                     <td>{teacher.email || '-'}</td>
                                     <td>{teacher.homeroom_classes || '-'}</td>
-                                    <td>{roles.find(role => role.id === teacher.role_id)?.label || teacher.role_name || '-'}</td>
+                                    <td>
+                                        {(() => {
+                                            const rObj = roles.find(role => role.id === teacher.role_id);
+                                            const label = rObj?.label || teacher.role_name || 'Giáo viên';
+                                            let badgeClass = 'bg-primary';
+                                            if (teacher.role_name === 'canteen_manager') badgeClass = 'bg-warning text-dark';
+                                            else if (teacher.role_name === 'dorm_manager') badgeClass = 'bg-info text-dark';
+                                            else if (teacher.role_name === 'manager') badgeClass = 'bg-danger';
+                                            return <span className={`badge ${badgeClass}`}>{label}</span>;
+                                        })()}
+                                    </td>
                                     <td>
                                          <div className="d-flex gap-1">
                                              <button className="btn btn-sm btn-info" type="button" title="Chi tiết/Sửa" onClick={(e) => { e.stopPropagation(); openDetailModal(teacher); }}>
@@ -415,11 +433,11 @@ const TeacherManager = () => {
                                             <input className="form-control" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                                         </div>
                                         <div className="col-md-4 mb-3">
-                                            <label className="form-label">Vai trò</label>
+                                            <label className="form-label fw-bold">Vai trò <span className="text-danger">*</span></label>
                                             <select className="form-control" value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })} disabled={userRole !== 'manager'}>
-                                                <option value="">-- Chọn --</option>
-                                                {roles.map(role => (
-                                                    <option key={role.id} value={role.id}>{role.label}</option>
+                                                <option value="">-- Chọn vai trò --</option>
+                                                {staffRoles.map(role => (
+                                                    <option key={role.id} value={role.id}>{role.label || role.name}</option>
                                                 ))}
                                             </select>
                                         </div>

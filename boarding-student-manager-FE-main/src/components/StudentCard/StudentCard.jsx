@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { apiUrl } from '../../config/api';
 import { getStoredUser } from '../../config/auth';
@@ -55,6 +56,12 @@ const StudentCard = () => {
                 
                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
                     <Barcode value={cardData.id_VNeID} width={2} height={50} displayValue={false} />
+                </div>
+
+                <div style={{ marginTop: '20px' }}>
+                    <Link to="/violations" className="btn btn-outline-danger btn-sm w-100" style={{ borderRadius: '8px', padding: '8px 12px', fontWeight: 600 }}>
+                        <i className="fas fa-exclamation-triangle me-2"></i>Xem lỗi vi phạm & kỷ luật
+                    </Link>
                 </div>
             </div>
         </div>

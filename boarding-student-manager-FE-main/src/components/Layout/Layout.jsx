@@ -138,6 +138,7 @@ const Layout = ({ children }) => {
     const MENU_ITEMS = [
         { path: '/dashboard', label: 'Trang chủ', icon: 'fas fa-home', roles: ['all'] },
         { path: '/student-card', label: 'Thẻ học sinh', icon: 'fas fa-id-card', roles: ['student'] },
+        { path: '/violations', label: 'Lỗi vi phạm', icon: 'fas fa-exclamation-triangle', roles: ['student'] },
         {
             path: '/students', label: 'Quản lý học sinh', icon: 'fas fa-user-graduate', roles: ['manager', 'admin', 'teacher'], hasSub: true, id: 'students'
         },

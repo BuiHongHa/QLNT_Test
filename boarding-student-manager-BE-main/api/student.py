@@ -5,23 +5,38 @@ import io
 import re
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from werkzeug.security import generate_password_hash
 from mock_time import get_now, get_today
 from excel_utils import generate_excel_response, read_file_rows
 
 def create_student_account(cursor, id_vneid):
-    # Kiểm tra tài khoản đã tồn tại chưa
-    cursor.execute("SELECT id FROM tAccount WHERE username = %s", (id_vneid,))
-    if cursor.fetchone():
+    # Kiểm tra tài khoản đã tồn tại chưa (tAccount dùng khoá chính là username, không có cột id)
+    cursor.execute("SELECT username, is_active FROM tAccount WHERE username = %s", (id_vneid,))
+    row = cursor.fetchone()
+    
+    # Lấy role_id của student từ bảng tRole
+    cursor.execute("SELECT id FROM tRole WHERE name = 'student'")
+    role_row = cursor.fetchone()
+    student_role_id = (role_row['id'] if isinstance(role_row, dict) else role_row[0]) if role_row else 1
+
+    hashed_pw = generate_password_hash('123456')
+    if row:
+        is_act = row.get('is_active') if isinstance(row, dict) else row[1]
+        if not is_act:
+            cursor.execute("""
+                UPDATE tAccount
+                SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
+                WHERE username = %s
+            """, (hashed_pw, hashed_pw, student_role_id, id_vneid))
+            return True
         return False
     
-    # Tạo tài khoản mặc định (pass: 123456, role: 4 - student, must_change_password: 1)
-    hashed_pw = generate_password_hash('123456')
+    # Tạo tài khoản mặc định (pass: 123456, role: student, must_change_password: 1, is_active: 1)
     cursor.execute("""
-        INSERT INTO tAccount (username, password, role_id, must_change_password)
-        VALUES (%s, %s, %s, 1)
-    """, (id_vneid, hashed_pw, 4))
+        INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
+        VALUES (%s, %s, %s, %s, 1, 1)
+    """, (id_vneid, hashed_pw, hashed_pw, student_role_id))
     return True
 
 def parse_gender(val):
@@ -378,6 +393,12 @@ def get_student_activity(id_vneid):
             if row.get('access_time'):
                 row['access_time'] = row['access_time'].strftime('%Y-%m-%d %H:%M:%S')
 
+        try:
+            from api.inspection import ensure_tables as ensure_inspection_tables
+            ensure_inspection_tables(cursor)
+        except Exception:
+            pass
+
         cursor.execute("""
             SELECT ri.inspection_date,
                    ri.id_dormroom,
@@ -414,6 +435,124 @@ def get_student_activity(id_vneid):
                 "range": range_name,
                 "start_date": start_date,
                 "end_date": end_date,
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@student_bp.route('/<id_vneid>/violations', methods=['GET'])
+def get_student_violations(id_vneid):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            from api.inspection import ensure_tables as ensure_inspection_tables
+            ensure_inspection_tables(cursor)
+        except Exception:
+            pass
+
+        # 1. Lấy thông tin học sinh, lớp, phòng KTX
+        cursor.execute("""
+            SELECT s.id_VNeID, s.name, c.name AS class_name, d.name AS room_name, d.id AS id_dormroom
+            FROM tStudent s
+            LEFT JOIN STUDY st ON s.id_VNeID = st.id_student AND st.is_active = 1
+            LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
+            LEFT JOIN LIVING l ON s.id_VNeID = l.id_student AND l.is_active = 1
+            LEFT JOIN tDormroom d ON l.id_dormroom = d.id AND d.is_active = 1
+            WHERE s.id_VNeID = %s AND s.is_active = 1
+        """, (id_vneid,))
+        student_info = cursor.fetchone()
+        if not student_info:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Không tìm thấy thông tin học sinh"}), 404
+
+        room_id = student_info.get('id_dormroom')
+
+        # 2. Truy vấn danh sách vi phạm (cả lỗi cá nhân và lỗi tập thể phòng)
+        if room_id:
+            cursor.execute("""
+                SELECT v.id,
+                       ri.inspection_date,
+                       ri.id_dormroom,
+                       d.name AS room_name,
+                       c.name AS criteria_name,
+                       c.description AS criteria_desc,
+                       v.penalty_points,
+                       v.note AS violation_note,
+                       ri.note AS inspection_note,
+                       CASE 
+                           WHEN v.id_student = %s THEN 'Cá nhân'
+                           ELSE 'Tập thể phòng'
+                       END AS violation_scope
+                FROM tInspectionViolation v
+                JOIN tRoomInspection ri ON v.inspection_id = ri.id
+                JOIN tInspectionCriteria c ON v.criteria_id = c.id
+                JOIN tDormroom d ON ri.id_dormroom = d.id
+                WHERE (v.id_student = %s OR (v.id_student IS NULL AND ri.id_dormroom = %s))
+                ORDER BY ri.inspection_date DESC, ri.id DESC, v.id DESC
+            """, (id_vneid, id_vneid, room_id))
+        else:
+            cursor.execute("""
+                SELECT v.id,
+                       ri.inspection_date,
+                       ri.id_dormroom,
+                       d.name AS room_name,
+                       c.name AS criteria_name,
+                       c.description AS criteria_desc,
+                       v.penalty_points,
+                       v.note AS violation_note,
+                       ri.note AS inspection_note,
+                       'Cá nhân' AS violation_scope
+                FROM tInspectionViolation v
+                JOIN tRoomInspection ri ON v.inspection_id = ri.id
+                JOIN tInspectionCriteria c ON v.criteria_id = c.id
+                JOIN tDormroom d ON ri.id_dormroom = d.id
+                WHERE v.id_student = %s
+                ORDER BY ri.inspection_date DESC, ri.id DESC, v.id DESC
+            """, (id_vneid,))
+
+        violations = cursor.fetchall()
+        today = get_today()
+        first_of_month = date(today.year, today.month, 1)
+
+        total_penalty = 0.0
+        month_penalty = 0.0
+        personal_count = 0
+        room_count = 0
+
+        for r in violations:
+            if r.get('inspection_date'):
+                insp_d = r['inspection_date']
+                r['inspection_date_str'] = str(insp_d)
+                if isinstance(insp_d, datetime):
+                    insp_d = insp_d.date()
+                if insp_d >= first_of_month:
+                    month_penalty += float(r.get('penalty_points') or 0)
+            pts = float(r.get('penalty_points') or 0)
+            r['penalty_points'] = pts
+            total_penalty += pts
+            if r.get('violation_scope') == 'Cá nhân':
+                personal_count += 1
+            else:
+                room_count += 1
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "student": student_info,
+                "summary": {
+                    "total_violations": len(violations),
+                    "total_penalty": total_penalty,
+                    "month_penalty": month_penalty,
+                    "personal_count": personal_count,
+                    "room_count": room_count
+                },
+                "violations": violations
             }
         })
     except Exception as e:

@@ -6,7 +6,13 @@ import io
 
 inspection_bp = Blueprint('inspection', __name__)
 
+from api.inspection_criteria import ensure_criteria_table
+
 def ensure_tables(cursor):
+    try:
+        ensure_criteria_table(cursor)
+    except Exception:
+        pass
     cursor.execute("""CREATE TABLE IF NOT EXISTS tRoomInspection (
         id INT AUTO_INCREMENT PRIMARY KEY, id_dormroom VARCHAR(10) NOT NULL,
         inspection_date DATE NOT NULL, inspected_by CHAR(12) NULL,

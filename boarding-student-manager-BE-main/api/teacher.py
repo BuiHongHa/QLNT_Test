@@ -39,9 +39,11 @@ def get_current_school_year():
 
 def get_teacher_role_id(cursor):
     """Lấy role_id của role 'teacher'."""
-    cursor.execute("SELECT id FROM tRole WHERE name = 'teacher' AND is_active = 1")
+    cursor.execute("SELECT id FROM tRole WHERE name = 'teacher'")
     row = cursor.fetchone()
-    return row[0] if row else None
+    if not row:
+        return 2
+    return row['id'] if isinstance(row, dict) else row[0]
 
 @teacher_bp.route('/template', methods=['GET'])
 def get_template():
@@ -306,17 +308,27 @@ def create_teacher():
             VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
         """, (id_vneid, name, birth, sex, phone_number, email, address))
 
-        # --- 2. Tạo account, password mặc định = số CCCD ---
-        role_id = get_teacher_role_id(cursor)
+        # --- 2. Tạo account, password mặc định = số CCCD, role theo lựa chọn (Giáo viên, Quản lý nhà ăn, Quản lý KTX...) ---
+        req_role_id = data.get('role_id')
+        if req_role_id:
+            try:
+                role_id = int(req_role_id)
+            except (ValueError, TypeError):
+                role_id = get_teacher_role_id(cursor)
+        else:
+            role_id = get_teacher_role_id(cursor)
+
+        hashed_pw = generate_password_hash(id_vneid)
         cursor.execute("""
-            INSERT INTO tAccount (username, password, role_id, must_change_password, is_active)
-            VALUES (%s, %s, %s, 1, 1)
+            INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
+            VALUES (%s, %s, %s, %s, 1, 1)
             ON DUPLICATE KEY UPDATE 
                 password = IF(is_active = 0, VALUES(password), password),
+                password_hash = IF(is_active = 0, VALUES(password_hash), password_hash),
                 must_change_password = IF(is_active = 0, 1, must_change_password),
                 role_id = VALUES(role_id),
                 is_active = 1
-        """, (id_vneid, generate_password_hash(id_vneid), role_id))
+        """, (id_vneid, hashed_pw, hashed_pw, role_id))
 
         # --- 3. Xử lý lớp chủ nhiệm (nếu có) ---
         if homeroom_class:
@@ -336,6 +348,19 @@ def create_teacher():
                 VALUES (%s, %s)
                 ON DUPLICATE KEY UPDATE is_active = 1
             """, (id_vneid, class_id))
+
+        # Cập nhật vai trò (role_id) trong tAccount nếu có truyền lên
+        req_role_id = data.get('role_id')
+        if req_role_id:
+            try:
+                new_role_id = int(req_role_id)
+                cursor.execute("""
+                    UPDATE tAccount
+                    SET role_id = %s
+                    WHERE username = %s AND is_active = 1
+                """, (new_role_id, id_vneid))
+            except (ValueError, TypeError):
+                pass
 
         conn.commit()
         cursor.close()
@@ -392,6 +417,19 @@ def update_teacher(id_vneid):
                 VALUES (%s, %s)
                 ON DUPLICATE KEY UPDATE is_active = 1
             """, (id_vneid, class_id))
+
+        # Cập nhật vai trò (role_id) trong tAccount nếu có truyền lên
+        req_role_id = data.get('role_id')
+        if req_role_id:
+            try:
+                new_role_id = int(req_role_id)
+                cursor.execute("""
+                    UPDATE tAccount
+                    SET role_id = %s
+                    WHERE username = %s AND is_active = 1
+                """, (new_role_id, id_vneid))
+            except (ValueError, TypeError):
+                pass
 
         conn.commit()
         cursor.execute("SELECT id_VNeID FROM tTeacher WHERE id_VNeID = %s AND is_active = 1", (id_vneid,))
@@ -458,8 +496,8 @@ def fix_homeroom_classes():
 def provision_account(id_vneid):
     """Cấp/kích hoạt tài khoản thủ công cho giáo viên và đặt lại mật khẩu mặc định (CCCD)."""
     data = request.json or {}
-    actor_role = data.get('actor_role')
-    if actor_role != 'manager':
+    actor_role = (data.get('actor_role') or '').lower()
+    if actor_role not in {'manager', 'admin'}:
         return jsonify({"success": False, "message": "Chỉ quản lý được thực hiện cấp tài khoản"}), 403
 
     try:
@@ -474,28 +512,35 @@ def provision_account(id_vneid):
             conn.close()
             return jsonify({"success": False, "message": "Giáo viên không tồn tại hoặc đã bị vô hiệu hoá"}), 404
 
-        role_id = get_teacher_role_id(cursor)
+        req_role_id = data.get('role_id')
+        role_id = None
+        if req_role_id:
+            try:
+                role_id = int(req_role_id)
+            except (ValueError, TypeError):
+                pass
+
+        # Cập nhật hoặc thêm mới account (giữ lại role_id cũ nếu có và không truyền mới)
+        cursor.execute("SELECT username, role_id FROM tAccount WHERE username = %s", (id_vneid,))
+        existing = cursor.fetchone()
         if not role_id:
-            cursor.close()
-            conn.close()
-            return jsonify({"success": False, "message": "Không tìm thấy vai trò giáo viên trong hệ thống"}), 500
+            if existing and existing.get('role_id'):
+                role_id = existing['role_id']
+            else:
+                role_id = get_teacher_role_id(cursor)
 
         hashed_password = generate_password_hash(id_vneid)
-        
-        # Cập nhật hoặc thêm mới account
-        cursor.execute("SELECT username FROM tAccount WHERE username = %s", (id_vneid,))
-        existing = cursor.fetchone()
         if existing:
             cursor.execute("""
                 UPDATE tAccount
-                SET password = %s, role_id = %s, is_active = 1, must_change_password = 1
+                SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
                 WHERE username = %s
-            """, (hashed_password, role_id, id_vneid))
+            """, (hashed_password, hashed_password, role_id, id_vneid))
         else:
             cursor.execute("""
-                INSERT INTO tAccount (username, password, role_id, must_change_password, is_active)
-                VALUES (%s, %s, %s, 1, 1)
-            """, (id_vneid, hashed_password, role_id))
+                INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
+                VALUES (%s, %s, %s, %s, 1, 1)
+            """, (id_vneid, hashed_password, hashed_password, role_id))
 
         conn.commit()
         cursor.close()
@@ -527,8 +572,8 @@ def get_teachers_without_accounts():
 @teacher_bp.route('/create-accounts', methods=['POST'])
 def bulk_create_accounts():
     data = request.json or {}
-    actor_role = data.get('actor_role')
-    if actor_role != 'manager':
+    actor_role = (data.get('actor_role') or '').lower()
+    if actor_role not in {'manager', 'admin'}:
         return jsonify({"success": False, "message": "Chỉ quản lý được thực hiện cấp tài khoản"}), 403
 
     id_vneids = data.get('id_vneids')  # Danh sách CCCD cần cấp. Nếu None, cấp toàn bộ.
@@ -568,19 +613,20 @@ def bulk_create_accounts():
             id_vneid = t['id_VNeID']
             hashed_password = generate_password_hash(id_vneid)
             # Cập nhật hoặc thêm mới account
-            cursor.execute("SELECT username FROM tAccount WHERE username = %s", (id_vneid,))
+            cursor.execute("SELECT username, role_id FROM tAccount WHERE username = %s", (id_vneid,))
             existing = cursor.fetchone()
+            role_to_use = (existing.get('role_id') if (existing and existing.get('role_id')) else role_id)
             if existing:
                 cursor.execute("""
                     UPDATE tAccount
-                    SET password = %s, role_id = %s, is_active = 1, must_change_password = 1
+                    SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
                     WHERE username = %s
-                """, (hashed_password, role_id, id_vneid))
+                """, (hashed_password, hashed_password, role_to_use, id_vneid))
             else:
                 cursor.execute("""
-                    INSERT INTO tAccount (username, password, role_id, must_change_password, is_active)
-                    VALUES (%s, %s, %s, 1, 1)
-                """, (id_vneid, hashed_password, role_id))
+                    INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
+                    VALUES (%s, %s, %s, %s, 1, 1)
+                """, (id_vneid, hashed_password, hashed_password, role_to_use))
             count += 1
 
         conn.commit()
