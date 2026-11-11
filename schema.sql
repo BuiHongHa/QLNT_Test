@@ -325,23 +325,39 @@ CREATE TABLE tMealAttendance (
   CONSTRAINT fk_meal_student FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 22. BẢNG THỰC ĐƠN TUẦN NHÀ ĂN (tWeeklyMenu)
+-- 22. BẢNG THỰC ĐƠN TUẦN NHÀ ĂN (tWeeklyMenu - Master)
 DROP TABLE IF EXISTS tWeeklyMenu;
 CREATE TABLE tWeeklyMenu (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  menu_date DATE NOT NULL,
-  meal_type VARCHAR(10) NOT NULL,
-  rice VARCHAR(150) NOT NULL DEFAULT 'Cơm trắng',
-  main_dish_1 VARCHAR(200) NOT NULL,
-  main_dish_2 VARCHAR(200) NOT NULL,
-  side_dish VARCHAR(200) NOT NULL,
-  soup VARCHAR(200) NOT NULL,
-  dessert VARCHAR(150) NULL,
-  note VARCHAR(255) NULL,
+  start_date DATE NOT NULL,
+  note NVARCHAR(255) NULL,
   created_by CHAR(12) NULL,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_menu_date_meal (menu_date, meal_type),
-  CONSTRAINT fk_menu_creator FOREIGN KEY (created_by) REFERENCES tAccount(username) ON DELETE SET NULL ON UPDATE CASCADE
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_weekly_start_date (start_date),
+  CONSTRAINT fk_weekly_menu_creator FOREIGN KEY (created_by) REFERENCES tAccount(username) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 23. BẢNG CHI TIẾT THỰC ĐƠN TUẦN (tDetailWeeklyMenu - Composition)
+DROP TABLE IF EXISTS tDetailWeeklyMenu;
+CREATE TABLE tDetailWeeklyMenu (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_weekly_menu INT NOT NULL,
+  menu_date DATE NOT NULL,
+  meal_time VARCHAR(10) NOT NULL, -- LUNCH, DINNER, BREAKFAST
+  dishes NVARCHAR(500) NOT NULL DEFAULT '',
+  rice VARCHAR(150) NOT NULL DEFAULT 'Cơm trắng',
+  main_dish_1 VARCHAR(200) NOT NULL DEFAULT '',
+  main_dish_2 VARCHAR(200) NOT NULL DEFAULT '',
+  side_dish VARCHAR(200) NOT NULL DEFAULT '',
+  soup VARCHAR(200) NOT NULL DEFAULT '',
+  dessert VARCHAR(150) NULL,
+  meal_price DECIMAL(10, 0) NOT NULL DEFAULT 25000,
+  nutritional_standard NVARCHAR(255) NULL DEFAULT 'Đủ 5 nhóm chất (~750 kcal)',
+  note NVARCHAR(255) NULL,
+  UNIQUE KEY uniq_detail_date_meal (id_weekly_menu, menu_date, meal_time),
+  INDEX idx_detail_menu_date (menu_date, meal_time),
+  CONSTRAINT fk_detail_weekly_menu FOREIGN KEY (id_weekly_menu) REFERENCES tWeeklyMenu(id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

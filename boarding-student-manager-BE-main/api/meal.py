@@ -49,18 +49,36 @@ def ensure_meal_schema(cursor):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tWeeklyMenu (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            start_date DATE NOT NULL,
+            note NVARCHAR(255) NULL,
+            created_by CHAR(12) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_weekly_start_date (start_date),
+            CONSTRAINT fk_weekly_menu_creator FOREIGN KEY (created_by)
+                REFERENCES tAccount(username) ON DELETE SET NULL ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tDetailWeeklyMenu (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            id_weekly_menu INT NOT NULL,
             menu_date DATE NOT NULL,
-            meal_type VARCHAR(10) NOT NULL,
+            meal_time VARCHAR(10) NOT NULL,
+            dishes NVARCHAR(500) NOT NULL DEFAULT '',
             rice VARCHAR(150) NOT NULL DEFAULT 'Cơm trắng',
-            main_dish_1 VARCHAR(200) NOT NULL,
-            main_dish_2 VARCHAR(200) NOT NULL,
-            side_dish VARCHAR(200) NOT NULL,
-            soup VARCHAR(200) NOT NULL,
+            main_dish_1 VARCHAR(200) NOT NULL DEFAULT '',
+            main_dish_2 VARCHAR(200) NOT NULL DEFAULT '',
+            side_dish VARCHAR(200) NOT NULL DEFAULT '',
+            soup VARCHAR(200) NOT NULL DEFAULT '',
             dessert VARCHAR(150) NULL,
-            note VARCHAR(255) NULL,
-            created_by VARCHAR(50) NULL,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_menu_date_meal (menu_date, meal_type)
+            meal_price DECIMAL(10, 0) NOT NULL DEFAULT 25000,
+            nutritional_standard NVARCHAR(255) NULL DEFAULT 'Đủ 5 nhóm chất (~750 kcal)',
+            note NVARCHAR(255) NULL,
+            UNIQUE KEY uniq_detail_date_meal (id_weekly_menu, menu_date, meal_time),
+            INDEX idx_detail_menu_date (menu_date, meal_time),
+            CONSTRAINT fk_detail_weekly_menu FOREIGN KEY (id_weekly_menu)
+                REFERENCES tWeeklyMenu(id) ON DELETE CASCADE ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
     for column_sql in (
@@ -548,6 +566,49 @@ def export_meal_report():
         return jsonify({"success": False, "error": str(e)}), 500
 
 DAY_NAMES = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật']
+DEFAULT_MEAL_PRICE = 25000
+DEFAULT_NUTRITIONAL_STANDARD = 'Đủ 5 nhóm chất (~750 kcal)'
+
+
+def compose_dishes_text(meal):
+    parts = [
+        (meal.get('rice') or '').strip(),
+        (meal.get('main_dish_1') or '').strip(),
+        (meal.get('main_dish_2') or '').strip(),
+        (meal.get('side_dish') or '').strip(),
+        (meal.get('soup') or '').strip(),
+        (meal.get('dessert') or '').strip(),
+    ]
+    return ', '.join([p for p in parts if p]) or (meal.get('dishes') or '').strip()
+
+
+def empty_meal_detail():
+    return {
+        "rice": "Cơm trắng",
+        "main_dish_1": "",
+        "main_dish_2": "",
+        "side_dish": "",
+        "soup": "",
+        "dessert": "",
+        "dishes": "",
+        "meal_price": DEFAULT_MEAL_PRICE,
+        "nutritional_standard": DEFAULT_NUTRITIONAL_STANDARD,
+        "note": ""
+    }
+
+
+def upsert_weekly_menu_header(cursor, start_monday, note, username):
+    cursor.execute("""
+        INSERT INTO tWeeklyMenu (start_date, note, created_by)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            note = VALUES(note),
+            created_by = COALESCE(VALUES(created_by), created_by)
+    """, (start_monday, note or None, username))
+    cursor.execute("SELECT id FROM tWeeklyMenu WHERE start_date = %s LIMIT 1", (start_monday,))
+    row = cursor.fetchone()
+    return row['id'] if isinstance(row, dict) else row[0]
+
 
 @meal_bp.route('/menu/week', methods=['GET'])
 def get_weekly_menu():
@@ -563,27 +624,41 @@ def get_weekly_menu():
         ensure_meal_schema(cursor)
 
         cursor.execute("""
-            SELECT *
+            SELECT id, start_date, note, created_by
             FROM tWeeklyMenu
-            WHERE menu_date BETWEEN %s AND %s
-            ORDER BY menu_date ASC, meal_type DESC
-        """, (start_monday, end_sunday))
+            WHERE start_date = %s
+            LIMIT 1
+        """, (start_monday,))
+        weekly_header = cursor.fetchone()
+
+        cursor.execute("""
+            SELECT d.*
+            FROM tDetailWeeklyMenu d
+            JOIN tWeeklyMenu w ON d.id_weekly_menu = w.id
+            WHERE w.start_date = %s
+              AND d.menu_date BETWEEN %s AND %s
+            ORDER BY d.menu_date ASC, d.meal_time DESC
+        """, (start_monday, start_monday, end_sunday))
         rows = cursor.fetchall()
 
         menus_by_day = {}
         for r in rows:
             d_str = r['menu_date'].strftime('%Y-%m-%d')
-            m_type = r['meal_type'].upper()
+            m_type = (r.get('meal_time') or '').upper()
             if d_str not in menus_by_day:
                 menus_by_day[d_str] = {}
             menus_by_day[d_str][m_type] = {
                 "id": r['id'],
+                "id_weekly_menu": r['id_weekly_menu'],
                 "rice": r.get('rice') or 'Cơm trắng',
                 "main_dish_1": r.get('main_dish_1') or '',
                 "main_dish_2": r.get('main_dish_2') or '',
                 "side_dish": r.get('side_dish') or '',
                 "soup": r.get('soup') or '',
                 "dessert": r.get('dessert') or '',
+                "dishes": r.get('dishes') or compose_dishes_text(r),
+                "meal_price": int(r['meal_price']) if r.get('meal_price') is not None else DEFAULT_MEAL_PRICE,
+                "nutritional_standard": r.get('nutritional_standard') or DEFAULT_NUTRITIONAL_STANDARD,
                 "note": r.get('note') or ''
             }
 
@@ -598,24 +673,8 @@ def get_weekly_menu():
                 "date": d_str,
                 "day_name": DAY_NAMES[weekday_idx],
                 "is_today": (curr == today_date),
-                "lunch": day_menus.get('LUNCH', {
-                    "rice": "Cơm trắng",
-                    "main_dish_1": "",
-                    "main_dish_2": "",
-                    "side_dish": "",
-                    "soup": "",
-                    "dessert": "",
-                    "note": ""
-                }),
-                "dinner": day_menus.get('DINNER', {
-                    "rice": "Cơm trắng",
-                    "main_dish_1": "",
-                    "main_dish_2": "",
-                    "side_dish": "",
-                    "soup": "",
-                    "dessert": "",
-                    "note": ""
-                })
+                "lunch": day_menus.get('LUNCH', empty_meal_detail()),
+                "dinner": day_menus.get('DINNER', empty_meal_detail())
             })
             curr += timedelta(days=1)
 
@@ -624,8 +683,10 @@ def get_weekly_menu():
         return jsonify({
             "success": True,
             "data": {
+                "id": weekly_header['id'] if weekly_header else None,
                 "week_start": start_monday.strftime('%Y-%m-%d'),
                 "week_end": end_sunday.strftime('%Y-%m-%d'),
+                "note": (weekly_header.get('note') or '') if weekly_header else '',
                 "days": days
             }
         })
@@ -654,42 +715,91 @@ def save_weekly_menu():
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         ensure_meal_schema(cursor)
         username = resolve_account_username(cursor, raw_username)
+
+        week_start_str = data.get('week_start') or (days[0].get('date') if days else None)
+        if not week_start_str:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Thiếu ngày bắt đầu tuần"}), 400
+
+        ref_date = parse_date(week_start_str)
+        start_monday = ref_date - timedelta(days=ref_date.weekday())
+        week_note = (data.get('week_note') if data.get('week_note') is not None else data.get('note')) or ''
+        weekly_menu_id = upsert_weekly_menu_header(cursor, start_monday, week_note.strip(), username)
 
         for d in days:
             date_str = d.get('date')
             if not date_str:
                 continue
-            for meal_type in ('LUNCH', 'DINNER'):
-                m = d.get(meal_type.lower()) or {}
-                # Kiểm tra có nhập món hay không
-                if not (m.get('main_dish_1') or m.get('main_dish_2') or m.get('side_dish') or m.get('soup')):
+            for meal_time in ('LUNCH', 'DINNER'):
+                m = d.get(meal_time.lower()) or {}
+                has_content = any([
+                    m.get('main_dish_1'),
+                    m.get('main_dish_2'),
+                    m.get('side_dish'),
+                    m.get('soup'),
+                    m.get('dishes')
+                ])
+                if not has_content:
                     continue
+
+                rice = m.get('rice') or 'Cơm trắng'
+                main_1 = m.get('main_dish_1') or ''
+                main_2 = m.get('main_dish_2') or ''
+                side = m.get('side_dish') or ''
+                soup = m.get('soup') or ''
+                dessert = m.get('dessert') or ''
+                dishes = compose_dishes_text({
+                    'rice': rice,
+                    'main_dish_1': main_1,
+                    'main_dish_2': main_2,
+                    'side_dish': side,
+                    'soup': soup,
+                    'dessert': dessert,
+                    'dishes': m.get('dishes') or '',
+                })
+                raw_price = m.get('meal_price')
+                try:
+                    meal_price = max(0, int(float(raw_price))) if raw_price not in (None, '') else DEFAULT_MEAL_PRICE
+                except (TypeError, ValueError):
+                    meal_price = DEFAULT_MEAL_PRICE
+                nutritional_standard = (m.get('nutritional_standard') or DEFAULT_NUTRITIONAL_STANDARD).strip()
+
                 cursor.execute("""
-                    INSERT INTO tWeeklyMenu (menu_date, meal_type, rice, main_dish_1, main_dish_2, side_dish, soup, dessert, note, created_by)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO tDetailWeeklyMenu (
+                        id_weekly_menu, menu_date, meal_time, dishes,
+                        rice, main_dish_1, main_dish_2, side_dish, soup, dessert,
+                        meal_price, nutritional_standard, note
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
+                        dishes = VALUES(dishes),
                         rice = VALUES(rice),
                         main_dish_1 = VALUES(main_dish_1),
                         main_dish_2 = VALUES(main_dish_2),
                         side_dish = VALUES(side_dish),
                         soup = VALUES(soup),
                         dessert = VALUES(dessert),
-                        note = VALUES(note),
-                        created_by = VALUES(created_by)
+                        meal_price = VALUES(meal_price),
+                        nutritional_standard = VALUES(nutritional_standard),
+                        note = VALUES(note)
                 """, (
+                    weekly_menu_id,
                     date_str,
-                    meal_type,
-                    m.get('rice') or 'Cơm trắng',
-                    m.get('main_dish_1') or '',
-                    m.get('main_dish_2') or '',
-                    m.get('side_dish') or '',
-                    m.get('soup') or '',
-                    m.get('dessert') or '',
-                    m.get('note') or '',
-                    username
+                    meal_time,
+                    dishes,
+                    rice,
+                    main_1,
+                    main_2,
+                    side,
+                    soup,
+                    dessert,
+                    meal_price,
+                    nutritional_standard,
+                    m.get('note') or ''
                 ))
 
         conn.commit()
@@ -722,11 +832,16 @@ def copy_previous_week_menu():
         ensure_meal_schema(cursor)
         username = resolve_account_username(cursor, raw_username)
 
+        cursor.execute("SELECT * FROM tWeeklyMenu WHERE start_date = %s LIMIT 1", (prev_monday,))
+        prev_header = cursor.fetchone()
+
         cursor.execute("""
-            SELECT *
-            FROM tWeeklyMenu
-            WHERE menu_date BETWEEN %s AND %s
-        """, (prev_monday, prev_sunday))
+            SELECT d.*
+            FROM tDetailWeeklyMenu d
+            JOIN tWeeklyMenu w ON d.id_weekly_menu = w.id
+            WHERE w.start_date = %s
+              AND d.menu_date BETWEEN %s AND %s
+        """, (prev_monday, prev_monday, prev_sunday))
         prev_menus = cursor.fetchall()
 
         if not prev_menus:
@@ -734,32 +849,48 @@ def copy_previous_week_menu():
             conn.close()
             return jsonify({"success": False, "message": "Tuần trước chưa có thực đơn để sao chép"}), 400
 
+        target_weekly_id = upsert_weekly_menu_header(
+            cursor,
+            curr_monday,
+            (prev_header.get('note') if prev_header else None) or '',
+            username
+        )
+
         for m in prev_menus:
             diff_days = (m['menu_date'] - prev_monday).days
             target_date = curr_monday + timedelta(days=diff_days)
             cursor.execute("""
-                INSERT INTO tWeeklyMenu (menu_date, meal_type, rice, main_dish_1, main_dish_2, side_dish, soup, dessert, note, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tDetailWeeklyMenu (
+                    id_weekly_menu, menu_date, meal_time, dishes,
+                    rice, main_dish_1, main_dish_2, side_dish, soup, dessert,
+                    meal_price, nutritional_standard, note
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
+                    dishes = VALUES(dishes),
                     rice = VALUES(rice),
                     main_dish_1 = VALUES(main_dish_1),
                     main_dish_2 = VALUES(main_dish_2),
                     side_dish = VALUES(side_dish),
                     soup = VALUES(soup),
                     dessert = VALUES(dessert),
-                    note = VALUES(note),
-                    created_by = VALUES(created_by)
+                    meal_price = VALUES(meal_price),
+                    nutritional_standard = VALUES(nutritional_standard),
+                    note = VALUES(note)
             """, (
+                target_weekly_id,
                 target_date,
-                m['meal_type'],
+                m['meal_time'],
+                m.get('dishes') or compose_dishes_text(m),
                 m['rice'],
                 m['main_dish_1'],
                 m['main_dish_2'],
                 m['side_dish'],
                 m['soup'],
                 m['dessert'],
-                m['note'],
-                username
+                m.get('meal_price') if m.get('meal_price') is not None else DEFAULT_MEAL_PRICE,
+                m.get('nutritional_standard') or DEFAULT_NUTRITIONAL_STANDARD,
+                m.get('note') or ''
             ))
 
         conn.commit()

@@ -69,3 +69,13 @@ ON DUPLICATE KEY UPDATE num_of_bed = VALUES(num_of_bed);
 INSERT INTO LIVING (id_student, id_dormroom, import_date, is_active) VALUES
 ('001204000001', 'A101', '2026-09-05', 1),
 ('001204000002', 'B101', '2026-09-05', 1);
+
+-- 7. KHỞI TẠO THỰC ĐƠN TUẦN MẪU (tWeeklyMenu & tDetailWeeklyMenu)
+INSERT INTO tWeeklyMenu (id, start_date, note, created_by) VALUES
+(1, '2026-11-09', 'Thực đơn tuần chuẩn dinh dưỡng học sinh nội trú', 'BEP001')
+ON DUPLICATE KEY UPDATE note = VALUES(note);
+
+INSERT INTO tDetailWeeklyMenu (id_weekly_menu, menu_date, meal_time, dishes, rice, main_dish_1, main_dish_2, side_dish, soup, dessert, meal_price, nutritional_standard, note) VALUES
+(1, '2026-11-09', 'LUNCH', 'Cơm trắng, Thịt kho trứng cút, Tôm rim mặn ngọt, Rau muống xào tỏi, Canh cua mồng tơi, Dưa hấu', 'Cơm trắng', 'Thịt kho trứng cút', 'Tôm rim mặn ngọt', 'Rau muống xào tỏi', 'Canh cua mồng tơi', 'Dưa hấu', 25000, 'Đủ 5 nhóm chất (~750 kcal)', ''),
+(1, '2026-11-09', 'DINNER', 'Cơm trắng, Gà kho sả ớt, Trứng chiên thịt băm, Đậu bắp luộc, Canh chua cá lóc, Chuối tiêu', 'Cơm trắng', 'Gà kho sả ớt', 'Trứng chiên thịt băm', 'Đậu bắp luộc', 'Canh chua cá lóc', 'Chuối tiêu', 25000, 'Đủ 5 nhóm chất (~750 kcal)', '')
+ON DUPLICATE KEY UPDATE dishes = VALUES(dishes), meal_price = VALUES(meal_price), nutritional_standard = VALUES(nutritional_standard);

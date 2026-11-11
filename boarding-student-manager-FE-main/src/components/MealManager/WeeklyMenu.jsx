@@ -10,6 +10,7 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
     const [loading, setLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editDays, setEditDays] = useState([]);
+    const [editWeekNote, setEditWeekNote] = useState('');
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState(null);
 
@@ -27,6 +28,7 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                 if (data.success) {
                     setWeekData(data.data);
                     setEditDays(JSON.parse(JSON.stringify(data.data.days || [])));
+                    setEditWeekNote(data.data.note || '');
                 }
                 setLoading(false);
             })
@@ -73,8 +75,10 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                username: user?.username || 'canteen_manager',
+                username: user?.username || '',
                 role_name: roleName,
+                week_start: weekData?.week_start,
+                note: editWeekNote,
                 days: editDays
             })
         })
@@ -186,6 +190,7 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                                 className="btn btn-primary btn-sm"
                                 onClick={() => {
                                     setEditDays(JSON.parse(JSON.stringify(weekData?.days || [])));
+                                    setEditWeekNote(weekData?.note || '');
                                     setIsEditing(true);
                                 }}
                             >
@@ -229,11 +234,30 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
             )}
 
             {isEditing && (
-                <div className="alert alert-warning py-2 px-3 mb-3 d-flex align-items-center gap-2">
-                    <i className="fas fa-info-circle text-warning fs-5"></i>
-                    <span>
-                        <strong>Chế độ tạo & chỉnh sửa thực đơn:</strong> Nhập các món ăn cho từng ngày trong tuần theo tiêu chuẩn: <strong>1 Cơm, 2 Món mặn, 1 Món rau, 1 Món canh</strong>. Bấm &quot;Lưu thực đơn tuần&quot; sau khi hoàn tất.
-                    </span>
+                <div className="bg-white p-3 rounded shadow-sm mb-3">
+                    <div className="alert alert-warning py-2 px-3 mb-3 d-flex align-items-center gap-2">
+                        <i className="fas fa-info-circle text-warning fs-5"></i>
+                        <span>
+                            <strong>Chế độ tạo & chỉnh sửa thực đơn:</strong> Nhập các món ăn, đơn giá và tiêu chuẩn dinh dưỡng cho từng bữa. Bấm &quot;Lưu thực đơn tuần&quot; sau khi hoàn tất.
+                        </span>
+                    </div>
+                    <div>
+                        <label className="form-label small fw-bold text-muted mb-1">Ghi chú chung thực đơn tuần</label>
+                        <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="VD: Tuần tăng cường rau xanh, đảm bảo đủ định lượng..."
+                            value={editWeekNote}
+                            onChange={(e) => setEditWeekNote(e.target.value)}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {!isEditing && weekData?.note && (
+                <div className="alert alert-info py-2 px-3 mb-3 d-flex align-items-center gap-2">
+                    <i className="fas fa-sticky-note"></i>
+                    <span><strong>Ghi chú tuần:</strong> {weekData.note}</span>
                 </div>
             )}
 
@@ -309,6 +333,13 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                                                             <strong>Tráng miệng:</strong> {day.lunch.dessert}
                                                         </li>
                                                     )}
+                                                    <li className="mt-1 pt-1 border-top text-muted">
+                                                        <i className="fas fa-coins text-warning me-2"></i>
+                                                        <strong>Đơn giá:</strong> {Number(day.lunch.meal_price || 0).toLocaleString('vi-VN')} đ
+                                                        {day.lunch.nutritional_standard && (
+                                                            <> | <i className="fas fa-heart-pulse text-danger mx-1"></i>{day.lunch.nutritional_standard}</>
+                                                        )}
+                                                    </li>
                                                 </ul>
                                             ) : (
                                                 <div className="text-muted small fst-italic py-2 text-center">
@@ -352,6 +383,13 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                                                             <strong>Tráng miệng:</strong> {day.dinner.dessert}
                                                         </li>
                                                     )}
+                                                    <li className="mt-1 pt-1 border-top text-muted">
+                                                        <i className="fas fa-coins text-warning me-2"></i>
+                                                        <strong>Đơn giá:</strong> {Number(day.dinner.meal_price || 0).toLocaleString('vi-VN')} đ
+                                                        {day.dinner.nutritional_standard && (
+                                                            <> | <i className="fas fa-heart-pulse text-danger mx-1"></i>{day.dinner.nutritional_standard}</>
+                                                        )}
+                                                    </li>
                                                 </ul>
                                             ) : (
                                                 <div className="text-muted small fst-italic py-2 text-center">
@@ -445,6 +483,27 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                                                     onChange={(e) => handleEditChange(idx, 'lunch', 'dessert', e.target.value)}
                                                 />
                                             </div>
+                                            <div className="col-12 col-sm-6">
+                                                <label className="form-label small text-muted mb-1">Đơn giá (VNĐ)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1000"
+                                                    className="form-control form-control-sm"
+                                                    value={day.lunch?.meal_price ?? 25000}
+                                                    onChange={(e) => handleEditChange(idx, 'lunch', 'meal_price', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="col-12 col-sm-6">
+                                                <label className="form-label small text-muted mb-1">Tiêu chuẩn dinh dưỡng</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    value={day.lunch?.nutritional_standard || ''}
+                                                    placeholder="Đủ 5 nhóm chất (~750 kcal)"
+                                                    onChange={(e) => handleEditChange(idx, 'lunch', 'nutritional_standard', e.target.value)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
@@ -513,6 +572,27 @@ const WeeklyMenu = ({ user, roleName, mockToday, showConfirm, closeConfirm }) =>
                                                     value={day.dinner?.dessert || ''}
                                                     placeholder="Sữa chua / Trái cây..."
                                                     onChange={(e) => handleEditChange(idx, 'dinner', 'dessert', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="col-12 col-sm-6">
+                                                <label className="form-label small text-muted mb-1">Đơn giá (VNĐ)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1000"
+                                                    className="form-control form-control-sm"
+                                                    value={day.dinner?.meal_price ?? 25000}
+                                                    onChange={(e) => handleEditChange(idx, 'dinner', 'meal_price', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="col-12 col-sm-6">
+                                                <label className="form-label small text-muted mb-1">Tiêu chuẩn dinh dưỡng</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    value={day.dinner?.nutritional_standard || ''}
+                                                    placeholder="Đủ 5 nhóm chất (~750 kcal)"
+                                                    onChange={(e) => handleEditChange(idx, 'dinner', 'nutritional_standard', e.target.value)}
                                                 />
                                             </div>
                                         </div>
