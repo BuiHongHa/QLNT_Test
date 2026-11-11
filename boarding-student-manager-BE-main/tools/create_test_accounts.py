@@ -35,13 +35,13 @@ try:
         account = cursor.fetchone()
         if account:
             cursor.execute(
-                "UPDATE tAccount SET password = %s, role_id = %s, is_active = 1 WHERE username = %s",
+                "UPDATE tAccount SET password_hash = %s, role_id = %s, is_active = 1 WHERE username = %s",
                 (generate_password_hash(username), role['id'], username),
             )
             print(f"UPDATED {username} / {role_name}")
         else:
             cursor.execute(
-                "INSERT INTO tAccount (username, password, role_id, is_active) VALUES (%s, %s, %s, 1)",
+                "INSERT INTO tAccount (username, password_hash, role_id, is_active) VALUES (%s, %s, %s, 1)",
                 (username, generate_password_hash(username), role['id']),
             )
             print(f"CREATED {username} / {role_name}")

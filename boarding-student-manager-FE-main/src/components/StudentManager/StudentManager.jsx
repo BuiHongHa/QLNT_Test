@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import ConfirmModal from '../common/ConfirmModal';
 import { formatDate } from '../../utils/dateFormatter';
 
@@ -62,11 +62,7 @@ const StudentManager = () => {
     const fetchStudents = useCallback(() => {
         setLoading(true);
         const user = getStoredUser();
-        const roleMap = { 1: 'teacher', 2: 'manager', 3: 'manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-        let role = user?.role_name || roleMap[user?.role_id] || '';
-        if (user?.username === 'admin' || role === 'admin' || role === 'administrator') {
-            role = 'manager';
-        }
+        const role = getUserRole(user);
         setUserRole(role);
         const teacherParam = role === 'teacher' && user?.username !== 'admin' ? `?teacher_id=${user.username}` : '';
 
@@ -605,7 +601,7 @@ const StudentManager = () => {
                                         </div>
 
                                         <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3 mt-4">
-                                            <h6 className="fw-bold mb-0">Ra/vào và lỗi vi phạm</h6>
+                                            <h6 className="fw-bold mb-0">Lỗi vi phạm KTX</h6>
                                             <select
                                                 className="form-select form-select-sm"
                                                 style={{ width: '150px' }}
@@ -617,41 +613,23 @@ const StudentManager = () => {
                                             </select>
                                         </div>
                                         {studentActivityLoading ? (
-                                            <div className="text-muted small">Đang tải thông tin ra/vào và lỗi vi phạm...</div>
+                                            <div className="text-muted small">Đang tải thông tin lỗi vi phạm...</div>
                                         ) : (
-                                            <div className="row g-3">
-                                                <div className="col-md-6">
-                                                    <div className="small fw-bold mb-2">Lịch sử ra/vào gần đây</div>
-                                                    <div className="border rounded" style={{ maxHeight: '190px', overflowY: 'auto' }}>
-                                                        {!studentActivity?.access_logs?.length ? (
-                                                            <div className="p-3 text-muted small">Chưa có dữ liệu ra/vào</div>
-                                                        ) : studentActivity.access_logs.map(log => (
-                                                            <div key={log.id} className="p-2 border-bottom">
-                                                                <span className={`badge me-2 ${log.type === 'OUT' ? 'bg-warning text-dark' : 'bg-success'}`}>
-                                                                    {log.type === 'OUT' ? 'Ra' : log.type === 'IN' ? 'Vào' : log.type}
-                                                                </span>
-                                                                <span className="small">{log.access_time}</span>
-                                                                {log.note && <div className="small text-muted mt-1">{log.note}</div>}
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                            <div>
+                                                <div className="small fw-bold mb-2">
+                                                    Lỗi vi phạm ({studentActivity?.total_violations || 0}) - trừ {studentActivity?.total_penalty || 0} điểm
                                                 </div>
-                                                <div className="col-md-6">
-                                                    <div className="small fw-bold mb-2">
-                                                        Lỗi vi phạm ({studentActivity?.total_violations || 0}) - trừ {studentActivity?.total_penalty || 0} điểm
-                                                    </div>
-                                                    <div className="border rounded" style={{ maxHeight: '190px', overflowY: 'auto' }}>
-                                                        {!studentActivity?.violations?.length ? (
-                                                            <div className="p-3 text-muted small">Không có lỗi vi phạm trong kỳ đang chọn</div>
-                                                        ) : studentActivity.violations.map((item, index) => (
-                                                            <div key={`${item.inspection_date}-${item.criteria_name}-${index}`} className="p-2 border-bottom">
-                                                                <div className="small fw-bold">{item.criteria_name}</div>
-                                                                <div className="small text-muted">{item.inspection_date} | {item.room_name}</div>
-                                                                <div className="small text-danger">-{item.penalty_points} điểm</div>
-                                                                {item.note && <div className="small text-muted">{item.note}</div>}
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                                <div className="border rounded" style={{ maxHeight: '210px', overflowY: 'auto' }}>
+                                                    {!studentActivity?.violations?.length ? (
+                                                        <div className="p-3 text-muted small">Không có lỗi vi phạm trong kỳ đang chọn</div>
+                                                    ) : studentActivity.violations.map((item, index) => (
+                                                        <div key={`${item.inspection_date}-${item.criteria_name}-${index}`} className="p-2 border-bottom">
+                                                            <div className="small fw-bold">{item.criteria_name}</div>
+                                                            <div className="small text-muted">{item.inspection_date} | {item.room_name}</div>
+                                                            <div className="small text-danger">-{item.penalty_points} điểm</div>
+                                                            {item.note && <div className="small text-muted">{item.note}</div>}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}

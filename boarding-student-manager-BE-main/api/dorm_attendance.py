@@ -19,7 +19,10 @@ def ensure_dorm_attendance_schema(cursor):
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uniq_attendance (attendance_date, id_student),
-            KEY idx_date_room (attendance_date, id_dormroom)
+            KEY idx_date_room (attendance_date, id_dormroom),
+            CONSTRAINT fk_att_room FOREIGN KEY (id_dormroom) REFERENCES tDormroom(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+            CONSTRAINT fk_att_student FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID) ON UPDATE CASCADE ON DELETE RESTRICT,
+            CONSTRAINT fk_att_recorder FOREIGN KEY (recorded_by) REFERENCES tAccount(username) ON UPDATE CASCADE ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     """)
 
@@ -224,7 +227,7 @@ def save_room_attendance():
     data = request.get_json() or {}
     date_str = data.get('date') or str(get_today())
     room_id = data.get('id_dormroom')
-    recorded_by = data.get('recorded_by') or ''
+    raw_recorded_by = (data.get('recorded_by') or '').strip() or None
     records = data.get('records', [])
 
     if not room_id or not records:
@@ -234,6 +237,11 @@ def save_room_attendance():
         conn = get_db_connection()
         cursor = conn.cursor()
         ensure_dorm_attendance_schema(cursor)
+        recorded_by = None
+        if raw_recorded_by:
+            cursor.execute("SELECT username FROM tAccount WHERE username = %s LIMIT 1", (raw_recorded_by,))
+            if cursor.fetchone():
+                recorded_by = raw_recorded_by
 
         upsert_sql = """
             INSERT INTO tDormAttendance (attendance_date, id_dormroom, id_student, status, note, recorded_by)

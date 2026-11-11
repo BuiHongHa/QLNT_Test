@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../Layout/Layout';
 import './Dashboard.css';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import DashboardDetailModal from './DashboardDetailModal';
 
-const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
 const roleLabelMap = {
     teacher: 'Giáo viên',
     manager: 'Ban Giám Hiệu',
@@ -72,7 +71,7 @@ const Dashboard = () => {
         const parsed = getStoredUser();
         if (parsed) {
             setUser(parsed);
-            setRoleName(parsed.role_name || roleMap[parsed.role_id] || '');
+            setRoleName(getUserRole(parsed));
         }
 
         const fetchMockTime = () => {
@@ -126,7 +125,7 @@ const Dashboard = () => {
                                 key: 'pending_after_school',
                                 label: 'Đơn ra ngoài sau giờ học cần duyệt',
                                 count: pendingAfterSchool,
-                                action: () => navigate('/leave'),
+                                action: () => navigate('/leaves'),
                             });
                         }
                     }
@@ -472,21 +471,15 @@ const Dashboard = () => {
         if (!stats) return <div className="text-center py-4 text-muted">Đang tải thống kê...</div>;
 
         const dormCards = [
-            { key: 'total_rooms', title: 'Tổng số phòng KTX', value: stats.total_rooms || 0, icon: 'fas fa-door-closed', color: 'blue' },
-            { key: 'dorm_students', title: 'Học sinh đang ở KTX', value: stats.dorm_students || 0, icon: 'fas fa-users', color: 'green' },
-            { key: 'pending_after_school', title: 'Đơn ra ngoài cần duyệt', value: stats.pending_after_school || 0, icon: 'fas fa-clock', color: 'red' },
+            { key: 'total_rooms', title: 'Tổng số phòng KTX', value: stats.total_rooms || 0, icon: 'fas fa-door-closed', color: 'blue', action: () => navigate('/dormrooms') },
+            { key: 'dorm_students', title: 'Học sinh đang ở KTX', value: stats.dorm_students || 0, icon: 'fas fa-users', color: 'green', action: () => navigate('/dormrooms') },
+            { key: 'pending_after_school', title: 'Đơn ra ngoài cần duyệt', value: stats.pending_after_school || 0, icon: 'fas fa-clock', color: 'red', action: () => navigate('/leaves') },
         ];
 
-        const todayCards = [
-            { key: 'guard_out_today', title: 'Lượt ra cổng hôm nay', value: stats.out_today || 0, icon: 'fas fa-sign-out-alt', color: 'orange' },
-            { key: 'guard_in_today', title: 'Lượt vào cổng hôm nay', value: stats.in_today || 0, icon: 'fas fa-sign-in-alt', color: 'green' },
-            { key: 'guard_abnormal_today', title: 'Bất thường hôm nay', value: stats.abnormal_today || 0, icon: 'fas fa-exclamation-triangle', color: 'red' },
-        ];
-
-        const weekCards = [
-            { key: 'guard_out_week', title: 'Lượt ra cổng trong tuần', value: stats.out_week || 0, icon: 'fas fa-calendar-minus', color: 'purple' },
-            { key: 'guard_in_week', title: 'Lượt vào cổng trong tuần', value: stats.in_week || 0, icon: 'fas fa-calendar-check', color: 'blue' },
-            { key: 'guard_abnormal_week', title: 'Bất thường trong tuần', value: stats.abnormal_week || 0, icon: 'fas fa-bell', color: 'red' },
+        const attendanceCards = [
+            { key: 'att_present_today', title: 'Có mặt hôm nay', value: stats.att_present_today || 0, icon: 'fas fa-user-check', color: 'green', action: () => navigate('/dorm-attendance') },
+            { key: 'att_leave_today', title: 'Vắng có phép', value: stats.att_leave_today || 0, icon: 'fas fa-calendar-check', color: 'orange', action: () => navigate('/dorm-attendance') },
+            { key: 'att_unexcused_today', title: 'Vắng không phép', value: stats.att_unexcused_today || 0, icon: 'fas fa-user-times', color: 'red', action: () => navigate('/dorm-attendance') },
         ];
 
         const renderCardRow = (cards) => (
@@ -496,15 +489,7 @@ const Dashboard = () => {
                         key={card.key}
                         className={`stat-card ${card.color}`}
                         style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                            if (card.key === 'pending_after_school') {
-                                navigate('/leave');
-                            } else if (card.key === 'total_rooms' || card.key === 'dorm_students') {
-                                navigate('/dorm');
-                            } else {
-                                openFetchDetails(card.title, card.key);
-                            }
-                        }}
+                        onClick={card.action}
                     >
                         <div className="stat-card-info">
                             <span className="stat-card-title">{card.title}</span>
@@ -525,16 +510,40 @@ const Dashboard = () => {
                     Quản lý Ký túc xá
                 </div>
                 {renderCardRow(dormCards)}
+
                 <div className="dashboard-section-title mt-4">
-                    <i className="fas fa-door-open me-2"></i>
-                    Thống kê ra/vào cổng hôm nay
+                    <i className="fas fa-user-check me-2"></i>
+                    Điểm danh phòng ở hôm nay
                 </div>
-                {renderCardRow(todayCards)}
+                {renderCardRow(attendanceCards)}
+
                 <div className="dashboard-section-title mt-4">
-                    <i className="fas fa-calendar-week me-2"></i>
-                    Thống kê ra/vào cổng trong tuần
+                    <i className="fas fa-clipboard-check me-2"></i>
+                    Kiểm tra phòng ở trong ngày
                 </div>
-                {renderCardRow(weekCards)}
+                <div className="dashboard-overview">
+                    <div className="stat-card green" style={{ cursor: 'pointer' }} onClick={() => openFetchDetails('Phòng đã kiểm tra trong ngày', 'inspected_rooms')}>
+                        <div className="stat-card-info">
+                            <span className="stat-card-title">Phòng đã kiểm tra</span>
+                            <span className="stat-card-value">{inspStats?.inspected_today || 0}</span>
+                        </div>
+                        <div className="stat-card-icon"><i className="fas fa-check-double"></i></div>
+                    </div>
+                    <div className="stat-card orange" style={{ cursor: 'pointer' }} onClick={() => openFetchDetails('Phòng chưa kiểm tra trong ngày', 'not_inspected_rooms')}>
+                        <div className="stat-card-info">
+                            <span className="stat-card-title">Phòng chưa kiểm tra</span>
+                            <span className="stat-card-value">{inspStats?.not_inspected_today || 0}</span>
+                        </div>
+                        <div className="stat-card-icon"><i className="fas fa-exclamation-triangle"></i></div>
+                    </div>
+                    <div className="stat-card red" style={{ cursor: 'pointer' }} onClick={() => openFetchDetails('Phòng lỗi nặng trong ngày', 'heavy_rooms')}>
+                        <div className="stat-card-info">
+                            <span className="stat-card-title">Phòng lỗi nặng</span>
+                            <span className="stat-card-value">{inspStats?.heavy_rooms || 0}</span>
+                        </div>
+                        <div className="stat-card-icon"><i className="fas fa-times-circle"></i></div>
+                    </div>
+                </div>
             </>
         );
     };
@@ -543,11 +552,11 @@ const Dashboard = () => {
         if (!stats) return <div className="text-center py-4 text-muted">Đang tải thống kê...</div>;
 
         const canteenCards = [
-            { key: 'total_students', title: 'Tổng học sinh', value: stats.total_students || 0, icon: 'fas fa-users', color: 'blue', action: () => navigate('/meal') },
-            { key: 'lunch_served_today', title: 'Suất trưa phục vụ', value: stats.lunch_served_today || 0, icon: 'fas fa-utensils', color: 'green', action: () => navigate('/meal') },
-            { key: 'lunch_cut_today', title: 'Suất trưa báo cắt', value: stats.lunch_cut_today || 0, icon: 'fas fa-ban', color: 'orange', action: () => navigate('/meal') },
-            { key: 'dinner_served_today', title: 'Suất tối phục vụ', value: stats.dinner_served_today || 0, icon: 'fas fa-concierge-bell', color: 'purple', action: () => navigate('/meal') },
-            { key: 'dinner_cut_today', title: 'Suất tối báo cắt', value: stats.dinner_cut_today || 0, icon: 'fas fa-times-circle', color: 'red', action: () => navigate('/meal') },
+            { key: 'total_students', title: 'Tổng học sinh', value: stats.total_students || 0, icon: 'fas fa-users', color: 'blue', action: () => navigate('/meals') },
+            { key: 'lunch_served_today', title: 'Suất trưa phục vụ', value: stats.lunch_served_today || 0, icon: 'fas fa-utensils', color: 'green', action: () => navigate('/meals') },
+            { key: 'lunch_cut_today', title: 'Suất trưa báo cắt', value: stats.lunch_cut_today || 0, icon: 'fas fa-ban', color: 'orange', action: () => navigate('/meals') },
+            { key: 'dinner_served_today', title: 'Suất tối phục vụ', value: stats.dinner_served_today || 0, icon: 'fas fa-concierge-bell', color: 'purple', action: () => navigate('/meals') },
+            { key: 'dinner_cut_today', title: 'Suất tối báo cắt', value: stats.dinner_cut_today || 0, icon: 'fas fa-times-circle', color: 'red', action: () => navigate('/meals') },
         ];
 
         return (
@@ -638,18 +647,6 @@ const Dashboard = () => {
                                 <strong>{item.count}</strong>
                             </button>
                         ))}
-                    </div>
-                </div>
-            )}
-
-            {stats?.overdue_students_count > 0 && ['manager', 'teacher', 'dorm_manager'].includes(roleName) && (
-                <div className="dashboard-warning-banner">
-                    <div className="dashboard-warning-banner-header" onClick={() => openFetchDetails('Danh sách học sinh chưa vào trường quá hạn', 'overdue_students')} style={{ cursor: 'pointer' }}>
-                        <div className="dashboard-warning-banner-title">
-                            <i className="fas fa-exclamation-triangle me-2"></i>
-                            Cảnh báo: Có {stats.overdue_students_count} học sinh chưa vào trường mặc dù đã qua giờ phép!
-                        </div>
-                        <span className="dashboard-warning-banner-badge">{stats.overdue_students_count}</span>
                     </div>
                 </div>
             )}

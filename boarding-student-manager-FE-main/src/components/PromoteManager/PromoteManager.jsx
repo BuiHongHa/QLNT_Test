@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import ConfirmModal from '../common/ConfirmModal';
 
 const PromoteManager = () => {
@@ -22,8 +22,7 @@ const PromoteManager = () => {
 
     useEffect(() => {
         const user = getStoredUser();
-        const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-        const role = user?.role_name || roleMap[user?.role_id] || '';
+        const role = getUserRole(user);
         if (role !== 'manager') {
             navigate('/dashboard');
             return;

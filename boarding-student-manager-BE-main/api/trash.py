@@ -106,10 +106,6 @@ def hard_delete_item(item_type, id):
                 safe_delete_one(cursor, table, col, id)
             
         elif item_type == 'rooms':
-            try:
-                cursor.execute("UPDATE tcamera SET id_room = NULL WHERE id_room = %s", (id,))
-            except Exception:
-                pass
             for table, col in [
                 ('troominspection', 'id_dormroom'),
                 ('troomchangerequest', 'id_dormroom'),
@@ -196,10 +192,6 @@ def bulk_hard_delete_items(item_type):
             ]:
                 safe_delete_bulk(cursor, table, col, ids)
         elif item_type == 'rooms':
-            try:
-                cursor.execute(f"UPDATE tcamera SET id_room = NULL WHERE id_room IN ({placeholders})", ids)
-            except Exception:
-                pass
             for table, col in [
                 ('troominspection', 'id_dormroom'),
                 ('troomchangerequest', 'id_dormroom'),

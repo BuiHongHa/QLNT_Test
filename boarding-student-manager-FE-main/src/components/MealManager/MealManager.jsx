@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import { useMockToday } from '../../hooks/useMockToday';
 import ConfirmModal from '../common/ConfirmModal';
 import DateRangePicker from '../common/DateRangePicker';
@@ -10,7 +10,6 @@ import MealStats from './MealStats';
 
 const API_MEAL = apiUrl('/api/meal');
 const API_STUDENT = apiUrl('/api/student');
-const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
 
 const sortViName = (a, b) => {
     const clsA = a.class_name || '';
@@ -30,10 +29,7 @@ const sortViName = (a, b) => {
 
 const MealManager = () => {
     const user = getStoredUser() || {};
-    let roleName = user.role_name || roleMap[user.role_id] || '';
-    if (user?.username === 'admin' || roleName === 'admin' || roleName === 'administrator') {
-        roleName = 'manager';
-    }
+    const roleName = getUserRole(user);
 
     const [searchParams, setSearchParams] = useSearchParams();
     const tabParam = searchParams.get('tab') || 'attendance';

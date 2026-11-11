@@ -21,11 +21,13 @@ def main():
     if admin:
         print("Admin account already exists.")
     else:
-        # role_id = 2 is manager
+        cursor.execute("SELECT id FROM tRole WHERE name = 'manager' LIMIT 1")
+        role_row = cursor.fetchone()
+        manager_role_id = role_row['id'] if role_row else 3
         hashed_password = generate_password_hash("admin")
         cursor.execute(
-            "INSERT INTO tAccount (username, password, role_id) VALUES (%s, %s, %s)",
-            ("admin", hashed_password, 2)
+            "INSERT INTO tAccount (username, password_hash, role_id) VALUES (%s, %s, %s)",
+            ("admin", hashed_password, manager_role_id)
         )
         conn.commit()
         print("Admin account created successfully with username 'admin' and password 'admin'.")

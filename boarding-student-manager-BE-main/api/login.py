@@ -25,12 +25,10 @@ ROLE_LABELS = {
 def normalize_role_name(role_name):
     if not role_name:
         return 'manager'
-    role_lower = str(role_name).lower()
+    role_lower = str(role_name).strip().lower()
     if role_lower in ('admin', 'administrator', 'root'):
         return 'manager'
-    if role_lower in ('guardian', 'guard'):
-        return 'dorm_manager'
-    return role_name
+    return role_lower
 
 def find_active_user(username):
     conn = get_db_connection()
@@ -55,7 +53,6 @@ def find_active_user(username):
         conn.close()
 
 def serialize_user(user):
-    user.pop('password', None)
     user.pop('password_hash', None)
     user['role_name'] = normalize_role_name(user.get('role_name'))
     user['role_label'] = ROLE_LABELS.get(user.get('role_name'), user.get('role_name'))
@@ -70,7 +67,7 @@ def auth_login():
     
     try:
         user = find_active_user(username)
-        pwd_hash = user.get('password') or user.get('password_hash') if user else None
+        pwd_hash = user.get('password_hash') if user else None
         
         if user and pwd_hash and check_password_hash(pwd_hash, password):
             access_token = create_access_token(identity=username)
@@ -154,10 +151,6 @@ def get_roles():
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            UPDATE tRole SET name = 'dorm_manager'
-            WHERE name IN ('guard', 'guardian')
-        """)
         for role_name in ('student', 'teacher', 'manager', 'dorm_manager', 'canteen_manager'):
             cursor.execute("""
                 INSERT INTO tRole (name)
@@ -184,16 +177,19 @@ def update_account_role(username):
         return jsonify({"success": False, "message": "Chỉ quản lý được set role"}), 403
     if not role_id:
         return jsonify({"success": False, "message": "Thiếu role_id"}), 400
-    if username == 'admin' and str(role_id) != '2':
-        return jsonify({"success": False, "message": "Không thể thay đổi vai trò của tài khoản Quản trị tối cao (admin)"}), 400
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM tRole WHERE id = %s AND is_active = 1", (role_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, name FROM tRole WHERE id = %s AND is_active = 1", (role_id,))
+        target_role = cursor.fetchone()
+        if not target_role:
             cursor.close()
             conn.close()
             return jsonify({"success": False, "message": "Role không hợp lệ"}), 400
+        if username == 'admin' and normalize_role_name(target_role.get('name')) != 'manager':
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Không thể thay đổi vai trò của tài khoản Quản trị tối cao (admin)"}), 400
 
         cursor.execute("""
             UPDATE tAccount SET role_id = %s
@@ -211,7 +207,7 @@ def update_account_role(username):
                 """, (role_id, username))
             else:
                 cursor.execute("""
-                    INSERT INTO tAccount (username, password, role_id)
+                    INSERT INTO tAccount (username, password_hash, role_id)
                     VALUES (%s, %s, %s)
                 """, (username, generate_password_hash(username), role_id))
 
@@ -232,7 +228,7 @@ def create_account():
         conn = get_db_connection()
         cursor = conn.cursor()
         hashed_password = generate_password_hash(data['password'])
-        sql = """INSERT INTO tAccount (username, password, role_id)
+        sql = """INSERT INTO tAccount (username, password_hash, role_id)
                  VALUES (%s, %s, %s)"""
         val = (data['username'], hashed_password, data['role_id'])
         cursor.execute(sql, val)
@@ -253,7 +249,7 @@ def update_account(username):
         cursor = conn.cursor()
         hashed_password = generate_password_hash(data['password'])
         sql = """UPDATE tAccount 
-                 SET password=%s, role_id=%s
+                 SET password_hash=%s, role_id=%s
                  WHERE username=%s AND is_active=1"""
         val = (hashed_password, data['role_id'], username)
         cursor.execute(sql, val)
@@ -306,7 +302,7 @@ def change_password():
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT password FROM tAccount WHERE username = %s AND is_active = 1", (username,))
+        cursor.execute("SELECT password_hash FROM tAccount WHERE username = %s AND is_active = 1", (username,))
         user = cursor.fetchone()
 
         if not user:
@@ -314,13 +310,13 @@ def change_password():
             conn.close()
             return jsonify({"success": False, "message": "Tài khoản không tồn tại hoặc đã bị khoá"}), 404
 
-        if not check_password_hash(user['password'], old_password):
+        if not check_password_hash(user['password_hash'], old_password):
             cursor.close()
             conn.close()
             return jsonify({"success": False, "message": "Mật khẩu cũ không chính xác"}), 400
 
         hashed_new_password = generate_password_hash(new_password)
-        cursor.execute("UPDATE tAccount SET password = %s, must_change_password = 0 WHERE username = %s", (hashed_new_password, username))
+        cursor.execute("UPDATE tAccount SET password_hash = %s, must_change_password = 0 WHERE username = %s", (hashed_new_password, username))
         conn.commit()
         cursor.close()
         conn.close()
@@ -345,7 +341,7 @@ def reset_password(username):
         conn = get_db_connection()
         cursor = conn.cursor()
         hashed_new_password = generate_password_hash(new_password)
-        cursor.execute("UPDATE tAccount SET password = %s WHERE username = %s AND is_active = 1", (hashed_new_password, username))
+        cursor.execute("UPDATE tAccount SET password_hash = %s WHERE username = %s AND is_active = 1", (hashed_new_password, username))
         conn.commit()
         affected = cursor.rowcount
         cursor.close()
@@ -489,7 +485,7 @@ def reset_password_token():
         # Update password and set must_change_password to 0
         cursor.execute("""
             UPDATE tAccount
-            SET password = %s, must_change_password = 0
+            SET password_hash = %s, must_change_password = 0
             WHERE username = %s AND is_active = 1
         """, (hashed_password, username))
         
@@ -534,7 +530,7 @@ def change_password_first():
         hashed_password = generate_password_hash(new_password)
         cursor.execute("""
             UPDATE tAccount
-            SET password = %s, must_change_password = 0
+            SET password_hash = %s, must_change_password = 0
             WHERE username = %s
         """, (hashed_password, username))
         conn.commit()

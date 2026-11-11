@@ -14,27 +14,37 @@ def ensure_tables(cursor):
     except Exception:
         pass
     cursor.execute("""CREATE TABLE IF NOT EXISTS tRoomInspection (
-        id INT AUTO_INCREMENT PRIMARY KEY, id_dormroom VARCHAR(10) NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY, id_dormroom VARCHAR(20) NOT NULL,
         inspection_date DATE NOT NULL, inspected_by CHAR(12) NULL,
         note VARCHAR(500) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_room_date (id_dormroom, inspection_date),
-        CONSTRAINT fk_insp_room FOREIGN KEY (id_dormroom) REFERENCES tDormroom(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
+        CONSTRAINT fk_insp_room FOREIGN KEY (id_dormroom) REFERENCES tDormroom(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+        CONSTRAINT fk_insp_user FOREIGN KEY (inspected_by) REFERENCES tAccount(username) ON UPDATE CASCADE ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
     cursor.execute("""CREATE TABLE IF NOT EXISTS tInspectionViolation (
         id INT AUTO_INCREMENT PRIMARY KEY, inspection_id INT NOT NULL,
         criteria_id INT NOT NULL, penalty_points DECIMAL(4,1) NOT NULL,
         id_student CHAR(12) NULL, note VARCHAR(255) NULL,
         CONSTRAINT fk_viol_insp FOREIGN KEY (inspection_id) REFERENCES tRoomInspection(id) ON DELETE CASCADE,
-        CONSTRAINT fk_viol_crit FOREIGN KEY (criteria_id) REFERENCES tInspectionCriteria(id),
+        CONSTRAINT fk_viol_crit FOREIGN KEY (criteria_id) REFERENCES tInspectionCriteria(id) ON DELETE RESTRICT,
         CONSTRAINT fk_viol_stu FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID) ON UPDATE CASCADE ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS tWeeklySummary (
-        id INT AUTO_INCREMENT PRIMARY KEY, week_start DATE NOT NULL, week_end DATE NOT NULL,
-        summary_type VARCHAR(10) NOT NULL, ref_id VARCHAR(30) NOT NULL,
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS tWeeklyRoomSummary (
+        id INT AUTO_INCREMENT PRIMARY KEY, week_start DATE NOT NULL,
+        id_dormroom VARCHAR(20) NOT NULL,
         total_penalty DECIMAL(6,1) NOT NULL DEFAULT 0, total_violations INT NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_summary (week_start, summary_type, ref_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
+        UNIQUE KEY uniq_week_room (week_start, id_dormroom),
+        CONSTRAINT fk_wrs_room FOREIGN KEY (id_dormroom) REFERENCES tDormroom(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS tWeeklyClassSummary (
+        id INT AUTO_INCREMENT PRIMARY KEY, week_start DATE NOT NULL,
+        id_class VARCHAR(50) NOT NULL,
+        total_penalty DECIMAL(6,1) NOT NULL DEFAULT 0, total_violations INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_week_class (week_start, id_class),
+        CONSTRAINT fk_wcs_class FOREIGN KEY (id_class) REFERENCES tClass(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""")
 
 def week_range(d=None):
     d = d or get_today()
@@ -155,8 +165,14 @@ def create_inspection():
         if cursor.fetchone():
             cursor.close(); conn.close()
             return jsonify({"success": False, "message": f"Phòng {room_id} đã được chấm ngày {insp_date}"}), 409
+        raw_inspected_by = (d.get('inspected_by') or '').strip() or None
+        inspected_by = None
+        if raw_inspected_by:
+            cursor.execute("SELECT username FROM tAccount WHERE username=%s LIMIT 1", (raw_inspected_by,))
+            if cursor.fetchone():
+                inspected_by = raw_inspected_by
         cursor.execute("""INSERT INTO tRoomInspection (id_dormroom, inspection_date, inspected_by, note)
-            VALUES (%s,%s,%s,%s)""", (room_id, insp_date, d.get('inspected_by'), d.get('note','')))
+            VALUES (%s,%s,%s,%s)""", (room_id, insp_date, inspected_by, d.get('note','')))
         insp_id = cursor.lastrowid
         for v in (d.get('violations') or []):
             cursor.execute("""INSERT INTO tInspectionViolation (inspection_id, criteria_id, penalty_points, id_student, note)
@@ -183,8 +199,14 @@ def update_inspection(id):
         curr = cursor.fetchone()
         insp_date = curr['inspection_date'] if curr else get_today()
 
+        raw_inspected_by = (d.get('inspected_by') or '').strip() or None
+        inspected_by = None
+        if raw_inspected_by:
+            cursor.execute("SELECT username FROM tAccount WHERE username=%s LIMIT 1", (raw_inspected_by,))
+            if cursor.fetchone():
+                inspected_by = raw_inspected_by
         cursor.execute("UPDATE tRoomInspection SET note=%s, inspected_by=%s WHERE id=%s",
-                       (d.get('note',''), d.get('inspected_by'), id))
+                       (d.get('note',''), inspected_by, id))
         cursor.execute("DELETE FROM tInspectionViolation WHERE inspection_id=%s", (id,))
         for v in (d.get('violations') or []):
             cursor.execute("""INSERT INTO tInspectionViolation (inspection_id, criteria_id, penalty_points, id_student, note)
@@ -241,36 +263,36 @@ def generate_weekly_summary(cursor, target_date=None):
         rid = v['id_dormroom']; pts = float(v['penalty_points'])
         room_totals.setdefault(rid, {'penalty': 0, 'count': 0})
         room_totals[rid]['penalty'] += pts; room_totals[rid]['count'] += 1
-        # Determine class attribution
+        # Determine class attribution (keyed by tClass.id for 3NF FK integrity)
         if v['id_student']:
-            cursor.execute("""SELECT c.name FROM STUDY st JOIN tClass c ON st.id_class=c.id AND c.is_active=1
+            cursor.execute("""SELECT c.id FROM STUDY st JOIN tClass c ON st.id_class=c.id AND c.is_active=1
                 WHERE st.id_student=%s AND st.is_active=1 LIMIT 1""", (v['id_student'],))
             cls = cursor.fetchone()
             if cls:
-                cn = cls['name']
-                class_totals.setdefault(cn, {'penalty': 0, 'count': 0})
-                class_totals[cn]['penalty'] += pts; class_totals[cn]['count'] += 1
+                cid = cls['id']
+                class_totals.setdefault(cid, {'penalty': 0, 'count': 0})
+                class_totals[cid]['penalty'] += pts; class_totals[cid]['count'] += 1
         else:
             # Unassigned: distribute to classes in room
-            # Get classes in room
-            cursor.execute("""SELECT DISTINCT c.name FROM LIVING l
+            cursor.execute("""SELECT DISTINCT c.id FROM LIVING l
                 JOIN STUDY st ON l.id_student=st.id_student AND st.is_active=1
                 JOIN tClass c ON st.id_class=c.id AND c.is_active=1
                 WHERE l.id_dormroom=%s AND l.is_active=1""", (rid,))
-            classes = [r['name'] for r in cursor.fetchall()]
+            classes = [r['id'] for r in cursor.fetchall()]
             if classes:
                 share = pts / len(classes); share_count = 1.0 / len(classes)
-                for cn in classes:
-                    class_totals.setdefault(cn, {'penalty': 0, 'count': 0})
-                    class_totals[cn]['penalty'] += share; class_totals[cn]['count'] += share_count
-    # Write summaries
-    cursor.execute("DELETE FROM tWeeklySummary WHERE week_start=%s", (mon,))
+                for cid in classes:
+                    class_totals.setdefault(cid, {'penalty': 0, 'count': 0})
+                    class_totals[cid]['penalty'] += share; class_totals[cid]['count'] += share_count
+    # Write normalized summaries
+    cursor.execute("DELETE FROM tWeeklyRoomSummary WHERE week_start=%s", (mon,))
+    cursor.execute("DELETE FROM tWeeklyClassSummary WHERE week_start=%s", (mon,))
     for rid, t in room_totals.items():
-        cursor.execute("""INSERT INTO tWeeklySummary (week_start, week_end, summary_type, ref_id, total_penalty, total_violations)
-            VALUES (%s,%s,'ROOM',%s,%s,%s)""", (mon, sun, rid, round(t['penalty'],1), t['count']))
-    for cn, t in class_totals.items():
-        cursor.execute("""INSERT INTO tWeeklySummary (week_start, week_end, summary_type, ref_id, total_penalty, total_violations)
-            VALUES (%s,%s,'CLASS',%s,%s,%s)""", (mon, sun, cn, round(t['penalty'],1), int(round(t['count']))))
+        cursor.execute("""INSERT INTO tWeeklyRoomSummary (week_start, id_dormroom, total_penalty, total_violations)
+            VALUES (%s,%s,%s,%s)""", (mon, rid, round(t['penalty'],1), t['count']))
+    for cid, t in class_totals.items():
+        cursor.execute("""INSERT INTO tWeeklyClassSummary (week_start, id_class, total_penalty, total_violations)
+            VALUES (%s,%s,%s,%s)""", (mon, cid, round(t['penalty'],1), int(round(t['count']))))
     return len(room_totals), len(class_totals)
 
 @inspection_bp.route('/summary/generate', methods=['POST'])
@@ -297,11 +319,27 @@ def get_weekly_summary():
         # Auto-generate if after Friday 16:00
         now = get_now()
         fri_16 = datetime.combine(mon + timedelta(days=4), datetime.strptime("16:00","%H:%M").time())
-        cursor.execute("SELECT COUNT(*) AS cnt FROM tWeeklySummary WHERE week_start=%s", (mon,))
+        cursor.execute("""
+            SELECT (
+                (SELECT COUNT(*) FROM tWeeklyRoomSummary WHERE week_start=%s)
+                + (SELECT COUNT(*) FROM tWeeklyClassSummary WHERE week_start=%s)
+            ) AS cnt
+        """, (mon, mon))
         if (cursor.fetchone() or {}).get('cnt', 0) == 0 and now >= fri_16:
             generate_weekly_summary(cursor, target)
             conn.commit()
-        cursor.execute("""SELECT * FROM tWeeklySummary WHERE week_start=%s ORDER BY summary_type, ref_id""", (mon,))
+        cursor.execute("""
+            SELECT id, week_start, DATE_ADD(week_start, INTERVAL 6 DAY) AS week_end,
+                   'ROOM' AS summary_type, id_dormroom AS ref_id, total_penalty, total_violations, created_at
+            FROM tWeeklyRoomSummary WHERE week_start=%s
+            UNION ALL
+            SELECT wcs.id, wcs.week_start, DATE_ADD(wcs.week_start, INTERVAL 6 DAY) AS week_end,
+                   'CLASS' AS summary_type, c.name AS ref_id, wcs.total_penalty, wcs.total_violations, wcs.created_at
+            FROM tWeeklyClassSummary wcs
+            JOIN tClass c ON wcs.id_class = c.id
+            WHERE wcs.week_start=%s
+            ORDER BY summary_type, ref_id
+        """, (mon, mon))
         rows = cursor.fetchall()
         for r in rows:
             r['week_start'] = str(r['week_start']); r['week_end'] = str(r['week_end'])
@@ -491,14 +529,20 @@ def export_xlsx():
             ws1 = wb.active; ws1.title = "Theo Phòng"
             ws1.append(["Mã phòng", "Tổng điểm trừ", "Số lỗi"])
             for cell in ws1[1]: cell.font = header_font; cell.fill = header_fill
-            cursor.execute("SELECT * FROM tWeeklySummary WHERE week_start=%s AND summary_type='ROOM' ORDER BY ref_id", (mon,))
+            cursor.execute("SELECT id_dormroom AS ref_id, total_penalty, total_violations FROM tWeeklyRoomSummary WHERE week_start=%s ORDER BY id_dormroom", (mon,))
             for r in cursor.fetchall():
                 ws1.append([r['ref_id'], float(r['total_penalty']), r['total_violations']])
             # Sheet 2: Class summary
             ws2 = wb.create_sheet("Theo Lớp")
             ws2.append(["Lớp", "Tổng điểm trừ", "Số lỗi"])
             for cell in ws2[1]: cell.font = header_font; cell.fill = header_fill
-            cursor.execute("SELECT * FROM tWeeklySummary WHERE week_start=%s AND summary_type='CLASS' ORDER BY ref_id", (mon,))
+            cursor.execute("""
+                SELECT c.name AS ref_id, wcs.total_penalty, wcs.total_violations
+                FROM tWeeklyClassSummary wcs
+                JOIN tClass c ON wcs.id_class = c.id
+                WHERE wcs.week_start=%s
+                ORDER BY c.name
+            """, (mon,))
             for r in cursor.fetchall():
                 ws2.append([r['ref_id'], float(r['total_penalty']), r['total_violations']])
         else:
@@ -640,7 +684,7 @@ def dashboard_stats():
                     dd['penalty_points'] = float(dd['penalty_points'])
                     if dd.get('inspection_date'): dd['inspection_date'] = str(dd['inspection_date'])
                 result['week_details'] = wk_det
-        elif role == 'manager':
+        elif role in ('manager', 'dorm_manager'):
             # Rooms with students (occupied)
             cursor.execute("""SELECT DISTINCT l.id_dormroom FROM LIVING l
                 JOIN tDormroom d ON l.id_dormroom=d.id AND d.is_active=1

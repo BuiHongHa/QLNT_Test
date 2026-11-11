@@ -2,28 +2,28 @@ from flask import Blueprint, request, jsonify
 from config import get_db_connection
 from mock_time import get_today, get_now
 from datetime import datetime, date, timedelta
-from api.leave import ensure_leave_schema, sync_regular_weekends, leave_status_with_overdue, current_weekend_window
+from api.leave import (
+    ensure_leave_schema,
+    sync_regular_weekends,
+    leave_status_with_overdue,
+    leave_stage_text,
+    current_weekend_window,
+)
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
 
 def normalize_role(role_name):
-    role = (role_name or '').strip().lower()
-    if role in ('guard', 'guardian'):
-        return 'dorm_manager'
-    return role
+    return (role_name or '').strip().lower()
 
 
-def format_approval_status(teacher_accept, manager_accept):
-    if teacher_accept == 'DENIED' or manager_accept == 'DENIED':
-        return 'Bị từ chối'
-    if teacher_accept == 'ACCEPTED' and manager_accept == 'ACCEPTED':
-        return 'Được duyệt'
-    if teacher_accept == 'PENDING':
-        return 'Chờ giáo viên duyệt'
-    if teacher_accept == 'ACCEPTED' and manager_accept == 'PENDING':
-        return 'Chờ quản lý duyệt'
-    return 'Đang chờ duyệt'
+APPROVED_LEAVE_ACTIVE_CONDITION = """
+    (
+        (lr.leave_type = 'AFTER_SCHOOL' AND lr.start_time <= %s AND lr.end_time >= %s AND lr.dorm_manager_accept = 'ACCEPTED')
+        OR (lr.leave_type = 'EMERGENCY' AND lr.start_time <= %s AND lr.end_time >= %s AND lr.manager_accept = 'ACCEPTED')
+        OR (lr.leave_type = 'REGULAR_WEEKEND' AND lr.recurring_parent_id IS NULL AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
+    )
+"""
 
 
 def dashboard_leave_detail_select():
@@ -60,6 +60,7 @@ def dashboard_pending_leave_select():
             lr.reason,
             lr.teacher_accept,
             lr.manager_accept,
+            lr.dorm_manager_accept,
             lr.recurring_parent_id,
             s.name AS student_name,
             c.name AS class_name,
@@ -83,11 +84,13 @@ def dashboard_pending_leave_select():
 
 def is_pending_leave_actionable(row, role_name, now=None):
     now = now or get_now()
-    if row.get('leave_type') == 'REGULAR_WEEKEND':
-        # Check if the parent registration itself is pending approval
+    leave_type = row.get('leave_type')
+    if leave_type == 'REGULAR_WEEKEND':
         parent_status = leave_status_with_overdue(
+            leave_type,
             row.get('teacher_accept'),
             row.get('manager_accept'),
+            row.get('dorm_manager_accept'),
             row.get('end_time'),
             now
         )
@@ -95,11 +98,12 @@ def is_pending_leave_actionable(row, role_name, now=None):
             relevant_approval = row.get('manager_accept') if role_name == 'manager' else row.get('teacher_accept')
             return (relevant_approval or 'PENDING') == 'PENDING'
 
-        # If parent registration is already approved, check if the current week's instance is pending
         if parent_status == 'ACCEPTED':
             weekly_status = leave_status_with_overdue(
+                leave_type,
                 row.get('current_week_teacher_accept'),
                 row.get('current_week_manager_accept'),
+                'NOT_REQUIRED',
                 row.get('current_week_end_time') or row.get('end_time'),
                 now
             )
@@ -107,78 +111,28 @@ def is_pending_leave_actionable(row, role_name, now=None):
                 relevant_weekly_approval = row.get('current_week_manager_accept') if role_name == 'manager' else row.get('current_week_teacher_accept')
                 return (relevant_weekly_approval or 'PENDING') == 'PENDING'
         return False
-    else:
-        # Non-recurring: standard checks
-        relevant_approval = row.get('manager_accept') if role_name == 'manager' else row.get('teacher_accept')
-        if (relevant_approval or 'PENDING') != 'PENDING':
+
+    if leave_type == 'AFTER_SCHOOL':
+        if role_name not in ('dorm_manager', 'manager'):
             return False
-        return leave_status_with_overdue(
-            row.get('teacher_accept'),
-            row.get('manager_accept'),
-            row.get('end_time'),
-            now
-        ) == 'PENDING'
+        relevant_approval = row.get('dorm_manager_accept')
+    elif leave_type == 'EMERGENCY':
+        if role_name != 'manager':
+            return False
+        relevant_approval = row.get('manager_accept')
+    else:
+        relevant_approval = row.get('manager_accept') if role_name == 'manager' else row.get('teacher_accept')
 
-
-def get_overdue_students(cursor, role_name, username, now):
-    role_name = normalize_role(role_name)
-    where_clause = ""
-    params = [now]
-
-    if role_name == 'teacher':
-        where_clause = """
-            AND st.id_class IN (
-                SELECT c.id
-                FROM tClass c
-                JOIN MANAGE m ON m.id_class = c.id
-                WHERE m.id_teacher = %s
-                  AND m.is_active = 1
-                  AND c.is_active = 1
-            )
-        """
-        params.append(username)
-
-    sql = f"""
-        SELECT DISTINCT 
-            s.id_VNeID AS id, 
-            s.name, 
-            c.name AS class_name, 
-            d.name AS room_name, 
-            lr.leave_type, 
-            lr.end_time, 
-            last_out.access_time AS exit_time
-        FROM tStudent s
-        JOIN (
-            SELECT id_student, access_time
-            FROM tAccessLog a
-            WHERE a.type = 'OUT'
-              AND a.id = (
-                  SELECT MAX(id)
-                  FROM tAccessLog
-                  WHERE id_student = a.id_student
-                    AND type IN ('IN', 'OUT')
-              )
-        ) last_out ON s.id_VNeID = last_out.id_student
-        JOIN tLeaveRequest lr ON lr.id_student = s.id_VNeID
-        LEFT JOIN STUDY st ON st.id_student = s.id_VNeID AND st.is_active = 1
-        LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
-        LEFT JOIN LIVING l ON l.id_student = s.id_VNeID AND l.is_active = 1
-        LEFT JOIN tDormroom d ON l.id_dormroom = d.id AND d.is_active = 1
-        WHERE s.is_active = 1
-          AND lr.is_active = 1
-          AND (
-            (lr.leave_type = 'AFTER_SCHOOL' AND lr.dorm_manager_accept = 'ACCEPTED')
-            OR (lr.leave_type = 'EMERGENCY' AND lr.manager_accept = 'ACCEPTED')
-            OR (lr.leave_type = 'REGULAR_WEEKEND' AND lr.recurring_parent_id IS NOT NULL AND lr.teacher_accept = 'ACCEPTED' AND lr.manager_accept = 'ACCEPTED')
-          )
-          AND lr.end_time < %s
-          AND last_out.access_time >= lr.start_time
-          AND last_out.access_time <= lr.end_time
-          {where_clause}
-        ORDER BY lr.end_time ASC
-    """
-    cursor.execute(sql, params)
-    return cursor.fetchall()
+    if (relevant_approval or 'PENDING') != 'PENDING':
+        return False
+    return leave_status_with_overdue(
+        leave_type,
+        row.get('teacher_accept'),
+        row.get('manager_accept'),
+        row.get('dorm_manager_accept'),
+        row.get('end_time'),
+        now
+    ) == 'PENDING'
 
 
 def get_week_range(today=None):
@@ -187,26 +141,6 @@ def get_week_range(today=None):
     monday = today - timedelta(days=today.weekday())
     sunday = monday + timedelta(days=6)
     return monday, sunday
-
-
-def dashboard_access_detail_select():
-    return """
-        SELECT
-            a.id,
-            a.id_student,
-            s.name AS student_name,
-            c.name AS class_name,
-            d.name AS room_name,
-            a.access_time,
-            a.type,
-            a.note
-        FROM tAccessLog a
-        JOIN tStudent s ON a.id_student = s.id_VNeID
-        LEFT JOIN STUDY st ON st.id_student = s.id_VNeID AND st.is_active = 1
-        LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
-        LEFT JOIN LIVING l ON l.id_student = s.id_VNeID AND l.is_active = 1
-        LEFT JOIN tDormroom d ON l.id_dormroom = d.id AND d.is_active = 1
-    """
 
 
 @dashboard_bp.route('/stats', methods=['GET'])
@@ -291,7 +225,7 @@ def get_dashboard_stats():
             result['pending_leaves'] = len([row for row in cursor.fetchall() if is_pending_leave_actionable(row, 'manager', now)])
 
             # Số học sinh ra ngoài trong ngày — theo loại
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT lr.leave_type, COUNT(DISTINCT lr.id_student) AS cnt
                 FROM tLeaveRequest lr
                 LEFT JOIN tLeaveRequest week
@@ -299,17 +233,9 @@ def get_dashboard_stats():
                  AND week.is_active = 1
                  AND week.start_time <= %s AND week.end_time >= %s
                 WHERE lr.is_active = 1
-                  AND (
-                    (lr.leave_type <> 'REGULAR_WEEKEND'
-                     AND lr.start_time <= %s AND lr.end_time >= %s
-                     AND lr.teacher_accept = 'ACCEPTED' AND lr.manager_accept = 'ACCEPTED')
-                    OR
-                    (lr.leave_type = 'REGULAR_WEEKEND'
-                     AND lr.recurring_parent_id IS NULL
-                     AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
-                  )
+                  AND {APPROVED_LEAVE_ACTIVE_CONDITION}
                 GROUP BY lr.leave_type
-            """, (now, now, now, now))
+            """, (now, now, now, now, now, now))
             outside_by_type = {
                 'AFTER_SCHOOL': 0,
                 'EMERGENCY': 0,
@@ -403,17 +329,9 @@ def get_dashboard_stats():
                      AND week.start_time <= %s AND week.end_time >= %s
                     WHERE lr.is_active = 1
                       AND st.id_class IN ({placeholders})
-                      AND (
-                        (lr.leave_type <> 'REGULAR_WEEKEND'
-                         AND lr.start_time <= %s AND lr.end_time >= %s
-                         AND lr.teacher_accept = 'ACCEPTED' AND lr.manager_accept = 'ACCEPTED')
-                        OR
-                        (lr.leave_type = 'REGULAR_WEEKEND'
-                         AND lr.recurring_parent_id IS NULL
-                         AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
-                      )
+                      AND {APPROVED_LEAVE_ACTIVE_CONDITION}
                     GROUP BY lr.leave_type
-                """, [now, now] + class_ids + [now, now])
+                """, [now, now] + class_ids + [now, now, now, now])
                 outside_by_type = {'AFTER_SCHOOL': 0, 'EMERGENCY': 0, 'REGULAR_WEEKEND': 0}
                 for row in cursor.fetchall():
                     if row['leave_type'] in outside_by_type:
@@ -464,7 +382,7 @@ def get_dashboard_stats():
 
             # Trạng thái đơn ra ngoài sau giờ học (trong ngày)
             cursor.execute("""
-                SELECT teacher_accept, manager_accept
+                SELECT leave_type, teacher_accept, manager_accept, dorm_manager_accept
                 FROM tLeaveRequest
                 WHERE is_active = 1
                   AND id_student = %s
@@ -475,16 +393,18 @@ def get_dashboard_stats():
             """, (username, today_start, today_end))
             after_school_row = cursor.fetchone()
             if after_school_row:
-                result['after_school_status'] = format_approval_status(
+                result['after_school_status'] = leave_stage_text(
+                    'AFTER_SCHOOL',
                     after_school_row.get('teacher_accept'),
                     after_school_row.get('manager_accept'),
+                    after_school_row.get('dorm_manager_accept'),
                 )
             else:
                 result['after_school_status'] = None
 
             # Trạng thái đơn nghỉ đột xuất (trong tuần)
             cursor.execute("""
-                SELECT teacher_accept, manager_accept
+                SELECT leave_type, teacher_accept, manager_accept, dorm_manager_accept
                 FROM tLeaveRequest
                 WHERE is_active = 1
                   AND id_student = %s
@@ -495,9 +415,11 @@ def get_dashboard_stats():
             """, (username, week_start, week_end))
             emergency_row = cursor.fetchone()
             if emergency_row:
-                result['emergency_status'] = format_approval_status(
+                result['emergency_status'] = leave_stage_text(
+                    'EMERGENCY',
                     emergency_row.get('teacher_accept'),
                     emergency_row.get('manager_accept'),
+                    emergency_row.get('dorm_manager_accept'),
                 )
             else:
                 result['emergency_status'] = None
@@ -541,39 +463,6 @@ def get_dashboard_stats():
                     result['regular_leave_status'] = 'Đang chờ duyệt đăng ký'
 
         elif role_name == 'dorm_manager':
-            for access_type, prefix in (('OUT', 'out'), ('IN', 'in')):
-                cursor.execute("""
-                    SELECT COUNT(*) AS cnt
-                    FROM tAccessLog
-                    WHERE type = %s AND access_time BETWEEN %s AND %s
-                """, (access_type, today_start, today_end))
-                result[f'{prefix}_today'] = (cursor.fetchone() or {}).get('cnt', 0)
-
-                cursor.execute("""
-                    SELECT COUNT(*) AS cnt
-                    FROM tAccessLog
-                    WHERE type = %s AND access_time BETWEEN %s AND %s
-                """, (access_type, week_start, week_end))
-                result[f'{prefix}_week'] = (cursor.fetchone() or {}).get('cnt', 0)
-
-            cursor.execute("""
-                SELECT COUNT(*) AS cnt
-                FROM tAccessLog
-                WHERE type IN ('IN', 'OUT')
-                  AND note LIKE %s
-                  AND access_time BETWEEN %s AND %s
-            """, ('%trái dự đoán%', today_start, today_end))
-            result['abnormal_today'] = (cursor.fetchone() or {}).get('cnt', 0)
-
-            cursor.execute("""
-                SELECT COUNT(*) AS cnt
-                FROM tAccessLog
-                WHERE type IN ('IN', 'OUT')
-                  AND note LIKE %s
-                  AND access_time BETWEEN %s AND %s
-            """, ('%trái dự đoán%', week_start, week_end))
-            result['abnormal_week'] = (cursor.fetchone() or {}).get('cnt', 0)
-
             cursor.execute("SELECT COUNT(*) AS cnt FROM tDormroom WHERE is_active = 1")
             result['total_rooms'] = (cursor.fetchone() or {}).get('cnt', 0)
             cursor.execute("SELECT COUNT(DISTINCT id_student) AS cnt FROM LIVING WHERE is_active = 1")
@@ -584,6 +473,23 @@ def get_dashboard_stats():
                 WHERE is_active = 1 AND leave_type = 'AFTER_SCHOOL' AND dorm_manager_accept = 'PENDING'
             """)
             result['pending_after_school'] = (cursor.fetchone() or {}).get('cnt', 0)
+
+            att_stats = {'PRESENT': 0, 'ABSENT_LEAVE': 0, 'ABSENT_UNEXCUSED': 0}
+            try:
+                cursor.execute("""
+                    SELECT status, COUNT(*) AS cnt
+                    FROM tDormAttendance
+                    WHERE attendance_date = %s
+                    GROUP BY status
+                """, (today,))
+                for row in cursor.fetchall():
+                    if row['status'] in att_stats:
+                        att_stats[row['status']] = row['cnt']
+            except Exception:
+                pass
+            result['att_present_today'] = att_stats['PRESENT']
+            result['att_leave_today'] = att_stats['ABSENT_LEAVE']
+            result['att_unexcused_today'] = att_stats['ABSENT_UNEXCUSED']
 
         elif role_name == 'canteen_manager':
             cursor.execute("SELECT COUNT(*) AS cnt FROM tStudent WHERE is_active = 1")
@@ -605,9 +511,6 @@ def get_dashboard_stats():
             dinner_cut = (cursor.fetchone() or {}).get('cnt', 0)
             result['dinner_cut_today'] = dinner_cut
             result['dinner_served_today'] = max(0, total_students - dinner_cut)
-
-        if role_name in ('manager', 'teacher', 'dorm_manager'):
-            result['overdue_students_count'] = len(get_overdue_students(cursor, role_name, username, now))
 
         cursor.close()
         conn.close()
@@ -821,20 +724,12 @@ def get_dashboard_details():
             """
 
             if role_name == 'manager':
-                cursor.execute(base_sql + """
+                cursor.execute(base_sql + f"""
                     WHERE lr.is_active = 1
                       AND lr.leave_type = %s
-                      AND (
-                        (lr.leave_type <> 'REGULAR_WEEKEND'
-                         AND lr.start_time <= %s AND lr.end_time >= %s
-                         AND lr.teacher_accept = 'ACCEPTED' AND lr.manager_accept = 'ACCEPTED')
-                        OR
-                        (lr.leave_type = 'REGULAR_WEEKEND'
-                         AND lr.recurring_parent_id IS NULL
-                         AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
-                      )
+                      AND {APPROVED_LEAVE_ACTIVE_CONDITION}
                     ORDER BY s.name
-                """, (now, now, target_leave_type, now, now))
+                """, (now, now, target_leave_type, now, now, now, now))
                 rows = cursor.fetchall()
             else:
                 cursor.execute("""
@@ -850,20 +745,12 @@ def get_dashboard_details():
                         WHERE lr.is_active = 1
                           AND lr.leave_type = %s
                           AND st.id_class IN ({placeholders})
-                          AND (
-                            (lr.leave_type <> 'REGULAR_WEEKEND'
-                             AND lr.start_time <= %s AND lr.end_time >= %s
-                             AND lr.teacher_accept = 'ACCEPTED' AND lr.manager_accept = 'ACCEPTED')
-                            OR
-                            (lr.leave_type = 'REGULAR_WEEKEND'
-                             AND lr.recurring_parent_id IS NULL
-                             AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
-                          )
+                          AND {APPROVED_LEAVE_ACTIVE_CONDITION}
                         ORDER BY s.name
-                    """, [now, now, target_leave_type] + class_ids + [now, now])
+                    """, [now, now, target_leave_type] + class_ids + [now, now, now, now])
                     rows = cursor.fetchall()
 
-        elif type == 'inspected_rooms' and role_name == 'manager':
+        elif type == 'inspected_rooms' and role_name in ('manager', 'dorm_manager'):
             cursor.execute("""
                 SELECT
                     ri.id_dormroom AS room_id,
@@ -881,7 +768,7 @@ def get_dashboard_details():
             """, (today,))
             rows = cursor.fetchall()
 
-        elif type == 'not_inspected_rooms' and role_name == 'manager':
+        elif type == 'not_inspected_rooms' and role_name in ('manager', 'dorm_manager'):
             cursor.execute("""
                 SELECT DISTINCT
                     d.id AS room_id,
@@ -902,7 +789,7 @@ def get_dashboard_details():
             """, (today,))
             rows = cursor.fetchall()
 
-        elif type == 'heavy_rooms' and role_name == 'manager':
+        elif type == 'heavy_rooms' and role_name in ('manager', 'dorm_manager'):
             cursor.execute("""
                 SELECT
                     ri.id_dormroom AS room_id,
@@ -921,43 +808,6 @@ def get_dashboard_details():
             """, (today,))
             rows = cursor.fetchall()
 
-        elif type in (
-            'guard_out_today',
-            'guard_in_today',
-            'guard_out_week',
-            'guard_in_week',
-            'guard_abnormal_today',
-            'guard_abnormal_week',
-        ) and role_name in ('dorm_manager', 'manager', 'guard'):
-            week_start = datetime.combine(monday, datetime.min.time())
-            week_end = datetime.combine(sunday, datetime.max.time())
-            is_week = type.endswith('_week')
-            start_at = week_start if is_week else datetime.combine(today, datetime.min.time())
-            end_at = week_end if is_week else datetime.combine(today, datetime.max.time())
-            params = [start_at, end_at]
-            extra_filter = ""
-
-            if type.startswith('guard_out'):
-                extra_filter = " AND a.type = %s"
-                params.append('OUT')
-            elif type.startswith('guard_in'):
-                extra_filter = " AND a.type = %s"
-                params.append('IN')
-            else:
-                extra_filter = " AND a.type IN ('IN', 'OUT') AND a.note LIKE %s"
-                params.append('%trái dự đoán%')
-
-            cursor.execute(f"""
-                {dashboard_access_detail_select()}
-                WHERE a.access_time BETWEEN %s AND %s
-                {extra_filter}
-                ORDER BY a.access_time DESC, a.id DESC
-            """, params)
-            rows = cursor.fetchall()
-            
-        elif type == 'overdue_students' and role_name in ('manager', 'teacher', 'dorm_manager', 'guard'):
-            rows = get_overdue_students(cursor, role_name, username, now)
-            
         elif type in ('student_leave_requests_this_week', 'student_leave_requests_today', 'student_pending_leaves_this_week') and role_name == 'student':
             if type == 'student_leave_requests_this_week':
                 cursor.execute(f"""

@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import { useMockToday } from '../../hooks/useMockToday';
 import ConfirmModal from '../common/ConfirmModal';
 import DateRangePicker from '../common/DateRangePicker';
 
 const API_LEAVE = apiUrl('/api/leave');
 const API_STUDENT = apiUrl('/api/student');
-const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
 
 const typeLabel = {
     REGULAR_WEEKEND: 'Về phép thường xuyên',
@@ -31,7 +30,7 @@ const statusClass = {
 
 const LeaveManager = () => {
     const user = getStoredUser() || {};
-    const roleName = user.role_name || roleMap[user.role_id] || '';
+    const roleName = getUserRole(user);
     const isStaff = ['teacher', 'manager', 'dorm_manager'].includes(roleName);
 
     // Sort: lớp -> tên (last word) -> họ + tên đệm (rest)

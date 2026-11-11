@@ -3,6 +3,23 @@ import { apiUrl } from './api';
 const ACCESS_TOKEN_KEY = 'access_token';
 const USER_KEY = 'user';
 
+export const ROLE_ID_MAP = {
+    1: 'student',
+    2: 'teacher',
+    3: 'manager',
+    4: 'dorm_manager',
+    5: 'canteen_manager',
+};
+
+export const getUserRole = (user) => {
+    if (!user) return '';
+    let role = String(user.role_name || ROLE_ID_MAP[user.role_id] || '').trim().toLowerCase();
+    if (user.username === 'admin' || role === 'admin' || role === 'administrator' || role === 'root') {
+        role = 'manager';
+    }
+    return role;
+};
+
 const stores = [sessionStorage, localStorage];
 
 export const getStoredUser = () => {

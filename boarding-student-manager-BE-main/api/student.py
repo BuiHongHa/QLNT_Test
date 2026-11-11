@@ -26,17 +26,17 @@ def create_student_account(cursor, id_vneid):
         if not is_act:
             cursor.execute("""
                 UPDATE tAccount
-                SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
+                SET password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
                 WHERE username = %s
-            """, (hashed_pw, hashed_pw, student_role_id, id_vneid))
+            """, (hashed_pw, student_role_id, id_vneid))
             return True
         return False
     
     # Tạo tài khoản mặc định (pass: 123456, role: student, must_change_password: 1, is_active: 1)
     cursor.execute("""
-        INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
-        VALUES (%s, %s, %s, %s, 1, 1)
-    """, (id_vneid, hashed_pw, hashed_pw, student_role_id))
+        INSERT INTO tAccount (username, password_hash, role_id, must_change_password, is_active)
+        VALUES (%s, %s, %s, 1, 1)
+    """, (id_vneid, hashed_pw, student_role_id))
     return True
 
 def parse_gender(val):
@@ -375,23 +375,10 @@ def get_student_activity(id_vneid):
     if range_name not in ('week', 'month'):
         range_name = 'month'
     start_date, end_date = get_activity_range(range_name)
-    access_limit = min(max(int(request.args.get('access_limit', 20)), 1), 100)
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            SELECT id, id_student, access_time, type, note
-            FROM tAccessLog
-            WHERE id_student = %s
-            ORDER BY access_time DESC, id DESC
-            LIMIT %s
-        """, (id_vneid, access_limit))
-        access_logs = cursor.fetchall()
-        for row in access_logs:
-            if row.get('access_time'):
-                row['access_time'] = row['access_time'].strftime('%Y-%m-%d %H:%M:%S')
 
         try:
             from api.inspection import ensure_tables as ensure_inspection_tables
@@ -428,7 +415,6 @@ def get_student_activity(id_vneid):
         return jsonify({
             "success": True,
             "data": {
-                "access_logs": access_logs,
                 "violations": violations,
                 "total_penalty": total_penalty,
                 "total_violations": len(violations),

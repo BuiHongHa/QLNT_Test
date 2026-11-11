@@ -10,7 +10,6 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "html5-qrcode": "^2.3.8",
     "react": "^19.2.6",
     "react-barcode": "^1.6.1",
     "react-dom": "^19.2.6",

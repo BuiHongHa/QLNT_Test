@@ -8,7 +8,6 @@ import StudentCard from './components/StudentCard/StudentCard'
 import StudentManager from './components/StudentManager/StudentManager'
 import TeacherManager from './components/TeacherManager/TeacherManager'
 import DormManager from './components/DormManager/DormManager'
-import AccessManager from './components/AccessManager/AccessManager';
 import LeaveManager from './components/LeaveManager/LeaveManager';
 import MealManager from './components/MealManager/MealManager';
 import InspectionManager from './components/InspectionManager/InspectionManager';
@@ -73,7 +72,6 @@ function App() {
         <Route path="/dorm-attendance" element={<ProtectedRoute><Layout><DormAttendance /></Layout></ProtectedRoute>} />
         <Route path="/leaves" element={<ProtectedRoute><Layout><LeaveManager /></Layout></ProtectedRoute>} />
         <Route path="/meals" element={<ProtectedRoute><Layout><MealManager /></Layout></ProtectedRoute>} />
-        <Route path="/access" element={<ProtectedRoute><Layout><AccessManager /></Layout></ProtectedRoute>} />
         <Route path="/inspection" element={<ProtectedRoute><Layout><InspectionManager /></Layout></ProtectedRoute>} />
         <Route path="/trash/students" element={<ProtectedRoute><Layout><TrashManager type="students" /></Layout></ProtectedRoute>} />
         <Route path="/trash/teachers" element={<ProtectedRoute><Layout><TrashManager type="teachers" /></Layout></ProtectedRoute>} />

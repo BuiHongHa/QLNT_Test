@@ -69,7 +69,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import ConfirmModal from '../common/ConfirmModal';
 
 const API_DORMROOM = apiUrl('/api/dormroom');
@@ -153,8 +153,7 @@ const DormManager = () => {
     const [transferConfirm, setTransferConfirm] = useState({ show: false, students: [] });
 
     const user = getStoredUser() || {};
-    const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-    const roleName = user.role_name || roleMap[user.role_id] || '';
+    const roleName = getUserRole(user);
     const isTeacher = roleName === 'teacher';
     const isManager = roleName === 'manager' || roleName === 'dorm_manager';
     const teacherQuery = isTeacher && user.username

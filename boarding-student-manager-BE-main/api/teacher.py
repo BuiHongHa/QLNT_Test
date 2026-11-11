@@ -86,16 +86,16 @@ def upload_teachers():
         roles_map = {row[1].strip().lower(): row[0] for row in cursor.fetchall()}
         default_role_id = roles_map.get('teacher', 1)
 
-        teacher_sql = """INSERT INTO tTeacher (id_VNeID, name, birth, sex, phone_number, address, is_home_teacher)
-                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+        teacher_sql = """INSERT INTO tTeacher (id_VNeID, name, birth, sex, phone_number, address)
+                 VALUES (%s, %s, %s, %s, %s, %s)
                  ON DUPLICATE KEY UPDATE 
                  name=VALUES(name), birth=VALUES(birth), sex=VALUES(sex), phone_number=VALUES(phone_number),
-                 address=VALUES(address), is_home_teacher=VALUES(is_home_teacher)"""
+                 address=VALUES(address)"""
 
-        account_sql = """INSERT INTO tAccount (username, password, role_id, must_change_password, is_active)
+        account_sql = """INSERT INTO tAccount (username, password_hash, role_id, must_change_password, is_active)
                          VALUES (%s, %s, %s, 1, 1)
                          ON DUPLICATE KEY UPDATE 
-                             password = IF(is_active = 0, VALUES(password), password),
+                             password_hash = IF(is_active = 0, VALUES(password_hash), password_hash),
                              must_change_password = IF(is_active = 0, 1, must_change_password),
                              role_id = VALUES(role_id),
                              is_active = 1"""
@@ -136,9 +136,8 @@ def upload_teachers():
 
                     birth = parse_date(birth_raw)
                     sex = parse_gender(sex_raw)
-                    is_home = 1 if str(is_home_raw).strip() in ['1', 'true', 'True', 'Có', 'có'] else 0
 
-                    val = (id_vneid, name, birth, sex, phone, address, is_home)
+                    val = (id_vneid, name, birth, sex, phone, address)
                     cursor.execute(teacher_sql, val)
 
                     # Tạo account nếu chưa có, password mặc định = 123456
@@ -191,7 +190,8 @@ def export_teachers():
 
         sql = """
             SELECT t.id_VNeID, t.name, t.birth, t.sex, t.phone_number, t.email, t.address,
-                   t.is_home_teacher, c.name as homeroom_class_name,
+                   CASE WHEN m.id_class IS NOT NULL THEN 1 ELSE 0 END AS is_home_teacher,
+                   c.name as homeroom_class_name,
                    r.name as role_name
             FROM tTeacher t
             LEFT JOIN MANAGE m ON t.id_VNeID = m.id_teacher AND m.is_active = 1
@@ -239,7 +239,8 @@ def get_teachers():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT t.*, 
+            SELECT t.*,
+                   CASE WHEN COUNT(m.id_class) > 0 THEN 1 ELSE 0 END AS is_home_teacher,
                    GROUP_CONCAT(m.id_class SEPARATOR ', ') AS homeroom_classes,
                    MAX(a.role_id) AS role_id,
                    MAX(r.name) AS role_name
@@ -264,6 +265,7 @@ def get_teacher(id_vneid):
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             SELECT t.*,
+                   CASE WHEN COUNT(m.id_class) > 0 THEN 1 ELSE 0 END AS is_home_teacher,
                    GROUP_CONCAT(m.id_class SEPARATOR ', ') AS homeroom_classes,
                    a.role_id,
                    r.name AS role_name
@@ -304,8 +306,8 @@ def create_teacher():
         cursor = conn.cursor()
 
         cursor.execute("""
-            INSERT INTO tTeacher (id_VNeID, name, birth, sex, phone_number, email, address, is_home_teacher)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+            INSERT INTO tTeacher (id_VNeID, name, birth, sex, phone_number, email, address)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (id_vneid, name, birth, sex, phone_number, email, address))
 
         # --- 2. Tạo account, password mặc định = số CCCD, role theo lựa chọn (Giáo viên, Quản lý nhà ăn, Quản lý KTX...) ---
@@ -320,15 +322,14 @@ def create_teacher():
 
         hashed_pw = generate_password_hash(id_vneid)
         cursor.execute("""
-            INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
-            VALUES (%s, %s, %s, %s, 1, 1)
+            INSERT INTO tAccount (username, password_hash, role_id, must_change_password, is_active)
+            VALUES (%s, %s, %s, 1, 1)
             ON DUPLICATE KEY UPDATE 
-                password = IF(is_active = 0, VALUES(password), password),
                 password_hash = IF(is_active = 0, VALUES(password_hash), password_hash),
                 must_change_password = IF(is_active = 0, 1, must_change_password),
                 role_id = VALUES(role_id),
                 is_active = 1
-        """, (id_vneid, hashed_pw, hashed_pw, role_id))
+        """, (id_vneid, hashed_pw, role_id))
 
         # --- 3. Xử lý lớp chủ nhiệm (nếu có) ---
         if homeroom_class:
@@ -387,7 +388,6 @@ def update_teacher(id_vneid):
         phone_number = clean_text(data.get('phone_number')) or None
         email = clean_text(data.get('email')) or None
         address = clean_text(data.get('address')) or None
-        is_home_teacher = int(data.get('is_home_teacher') or 0)
         homeroom_class = clean_text(data.get('homeroom_class_id')) or None
 
         if not name:
@@ -396,9 +396,9 @@ def update_teacher(id_vneid):
             return jsonify({"success": False, "error": "Họ tên là bắt buộc"}), 400
 
         sql = """UPDATE tTeacher 
-                 SET name=%s, birth=%s, sex=%s, phone_number=%s, email=%s, address=%s, is_home_teacher=%s
+                 SET name=%s, birth=%s, sex=%s, phone_number=%s, email=%s, address=%s
                  WHERE id_VNeID=%s AND is_active=1"""
-        val = (name, birth, sex, phone_number, email, address, is_home_teacher, id_vneid)
+        val = (name, birth, sex, phone_number, email, address, id_vneid)
         cursor.execute(sql, val)
         affected = cursor.rowcount
 
@@ -533,14 +533,14 @@ def provision_account(id_vneid):
         if existing:
             cursor.execute("""
                 UPDATE tAccount
-                SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
+                SET password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
                 WHERE username = %s
-            """, (hashed_password, hashed_password, role_id, id_vneid))
+            """, (hashed_password, role_id, id_vneid))
         else:
             cursor.execute("""
-                INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
-                VALUES (%s, %s, %s, %s, 1, 1)
-            """, (id_vneid, hashed_password, hashed_password, role_id))
+                INSERT INTO tAccount (username, password_hash, role_id, must_change_password, is_active)
+                VALUES (%s, %s, %s, 1, 1)
+            """, (id_vneid, hashed_password, role_id))
 
         conn.commit()
         cursor.close()
@@ -619,14 +619,14 @@ def bulk_create_accounts():
             if existing:
                 cursor.execute("""
                     UPDATE tAccount
-                    SET password = %s, password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
+                    SET password_hash = %s, role_id = %s, is_active = 1, must_change_password = 1
                     WHERE username = %s
-                """, (hashed_password, hashed_password, role_to_use, id_vneid))
+                """, (hashed_password, role_to_use, id_vneid))
             else:
                 cursor.execute("""
-                    INSERT INTO tAccount (username, password, password_hash, role_id, must_change_password, is_active)
-                    VALUES (%s, %s, %s, %s, 1, 1)
-                """, (id_vneid, hashed_password, hashed_password, role_to_use))
+                    INSERT INTO tAccount (username, password_hash, role_id, must_change_password, is_active)
+                    VALUES (%s, %s, %s, 1, 1)
+                """, (id_vneid, hashed_password, role_to_use))
             count += 1
 
         conn.commit()

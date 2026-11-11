@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { apiUrl } from '../../config/api';
-import { clearAuthSession, getStoredUser } from '../../config/auth';
+import { clearAuthSession, getStoredUser, getUserRole } from '../../config/auth';
 
 const Layout = ({ children }) => {
     const navigate = useNavigate();
@@ -26,11 +26,7 @@ const Layout = ({ children }) => {
         }
         setUser(currentUser);
 
-        const roleMap = { 1: 'teacher', 2: 'manager', 3: 'manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-        let userRole = currentUser?.role_name || roleMap[currentUser?.role_id] || '';
-        if (currentUser?.username === 'admin' || userRole === 'admin' || userRole === 'administrator') {
-            userRole = 'manager';
-        }
+        const userRole = getUserRole(currentUser);
         const teacherParam = userRole === 'teacher' && currentUser?.username !== 'admin' ? `?teacher_id=${currentUser.username}` : '';
 
         fetch(apiUrl(`/api/student/classes${teacherParam}`))
@@ -129,11 +125,7 @@ const Layout = ({ children }) => {
             .catch(() => setPasswordMessage({ text: 'Lỗi kết nối server', type: 'danger' }));
     };
 
-    const roleMap = { 1: 'teacher', 2: 'manager', 3: 'manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-    let userRoleName = user?.role_name || roleMap[user?.role_id] || '';
-    if (user?.username === 'admin' || userRoleName === 'admin' || userRoleName === 'administrator') {
-        userRoleName = 'manager';
-    }
+    const userRoleName = getUserRole(user);
 
     const MENU_ITEMS = [
         { path: '/dashboard', label: 'Trang chủ', icon: 'fas fa-home', roles: ['all'] },
@@ -160,7 +152,6 @@ const Layout = ({ children }) => {
                 { path: '/meals?tab=stats', label: 'Thống kê suất ăn', icon: 'fas fa-chart-pie', roles: ['manager', 'admin', 'canteen_manager'] }
             ]
         },
-        { path: '/access', label: 'Quản lý ra vào', icon: 'fas fa-door-open', roles: ['manager', 'admin', 'dorm_manager', 'teacher'] },
         {
             path: '/inspection', label: 'Chấm điểm phòng', icon: 'fas fa-clipboard-check', roles: ['manager', 'admin', 'dorm_manager', 'teacher'], hasSub: true, id: 'inspection',
             subItems: [

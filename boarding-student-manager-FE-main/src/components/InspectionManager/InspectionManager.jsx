@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import ConfirmModal from '../common/ConfirmModal';
 import { useSearchParams } from 'react-router-dom';
 import { formatDate } from '../../utils/dateFormatter';
@@ -22,8 +22,7 @@ const emptyDetailModal = {
 const InspectionManager = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const user = getStoredUser() || {};
-    const roleMap = { 1: 'teacher', 2: 'manager', 3: 'dorm_manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
-    const roleName = user.role_name || roleMap[user.role_id] || '';
+    const roleName = getUserRole(user);
     const isTeacher = roleName === 'teacher';
     const scopeQuery = `username=${encodeURIComponent(user.username || '')}&role_name=${encodeURIComponent(roleName)}`;
     const teacherQuery = isTeacher && user.username ? `?teacher_id=${encodeURIComponent(user.username)}` : '';

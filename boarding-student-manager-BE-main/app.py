@@ -10,7 +10,6 @@ from api.teacher import teacher_bp
 from api.login import login_bp
 from api.dormroom import dormroom_bp
 from api.class_api import class_bp
-from api.access_log import access_log_bp
 from api.leave import leave_bp
 from api.meal import meal_bp
 from api.debug import debug_bp
@@ -60,7 +59,6 @@ app.register_blueprint(teacher_bp, url_prefix='/api/teacher')
 app.register_blueprint(login_bp, url_prefix='/api/login')
 app.register_blueprint(dormroom_bp, url_prefix='/api/dormroom')
 app.register_blueprint(class_bp, url_prefix='/api/class')
-app.register_blueprint(access_log_bp, url_prefix='/api/access_log')
 app.register_blueprint(leave_bp, url_prefix='/api/leave')
 app.register_blueprint(meal_bp, url_prefix='/api/meal')
 app.register_blueprint(debug_bp, url_prefix='/api/debug')

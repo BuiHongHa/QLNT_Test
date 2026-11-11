@@ -62,14 +62,6 @@ const leaveTypes = new Set([
 
 const roomTypes = new Set(['inspected_rooms', 'not_inspected_rooms', 'heavy_rooms']);
 const roomRequestTypes = new Set(['room_change_requests']);
-const accessTypes = new Set([
-    'guard_out_today',
-    'guard_in_today',
-    'guard_out_week',
-    'guard_in_week',
-    'guard_abnormal_today',
-    'guard_abnormal_week',
-]);
 
 const DashboardDetailModal = ({
     title,
@@ -101,8 +93,6 @@ const DashboardDetailModal = ({
     const isLeaveList = leaveTypes.has(type);
     const isRoomList = roomTypes.has(type);
     const isRoomRequestList = roomRequestTypes.has(type);
-    const isAccessList = accessTypes.has(type);
-    const isOverdueList = type === 'overdue_students';
     const isPendingLeaves = type === 'pending_leaves' && ['manager', 'teacher', 'dorm_manager'].includes(role);
     const isPendingRoomRequests = type === 'room_change_requests' && (role === 'manager' || role === 'dorm_manager');
 
@@ -264,7 +254,7 @@ const DashboardDetailModal = ({
         return sortConfig.direction === 'asc' ? '↑' : '↓';
     };
 
-    const showFilterBar = classOptions.length > 0 || roomOptions.length > 0 || isInspection || isLeaveList || isStudentList || isRoomList || isRoomRequestList || isAccessList || isOverdueList;
+    const showFilterBar = classOptions.length > 0 || roomOptions.length > 0 || isInspection || isLeaveList || isStudentList || isRoomList || isRoomRequestList;
 
     const renderFilterBar = () => (
         <div className="border rounded-3 p-3 mb-3 bg-light-subtle">
@@ -576,78 +566,6 @@ const renderStatusBadge = (teacherAccept, managerAccept) => {
         </>
     );
 
-    const renderAccessTable = () => (
-        <>
-            {showFilterBar && renderFilterBar()}
-            <div className="table-responsive border rounded-3 overflow-hidden">
-                <table className="table table-hover table-striped align-middle mb-0">
-                    <thead className="table-light">
-                        <tr>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('access_time')}>Thời gian {sortIcon('access_time')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('student_name')}>Học sinh {sortIcon('student_name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('class_name')}>Lớp {sortIcon('class_name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('room_name')}>Phòng {sortIcon('room_name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('type')}>Loại {sortIcon('type')}</th>
-                            <th>Ghi chú</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pagedData.map((row, index) => (
-                            <tr key={`${row.id || row.id_student}-${index}`}>
-                                <td>{row.access_time || '-'}</td>
-                                <td className="fw-semibold">{row.student_name || row.id_student}</td>
-                                <td>{row.class_name || '-'}</td>
-                                <td>{row.room_name || '-'}</td>
-                                <td>
-                                    <span className={`badge ${row.type === 'IN' ? 'bg-success' : row.type === 'OUT' ? 'bg-danger' : 'bg-secondary'}`}>
-                                        {row.type === 'IN' ? 'VÀO' : row.type === 'OUT' ? 'RA' : row.type}
-                                    </span>
-                                </td>
-                                <td>{row.note || '-'}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            {renderPagination()}
-        </>
-    );
-
-    const renderOverdueTable = () => (
-        <>
-            {showFilterBar && renderFilterBar()}
-            <div className="table-responsive border rounded-3 overflow-hidden">
-                <table className="table table-hover table-striped align-middle mb-0">
-                    <thead className="table-light">
-                        <tr>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('id')}>Mã HS {sortIcon('id')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('name')}>Họ tên {sortIcon('name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('class_name')}>Lớp {sortIcon('class_name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('room_name')}>Phòng {sortIcon('room_name')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('leave_type')}>Loại phép {sortIcon('leave_type')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('exit_time')}>Giờ ra {sortIcon('exit_time')}</th>
-                            <th style={{ cursor: 'pointer' }} onClick={() => handleSort('end_time')}>Hạn vào {sortIcon('end_time')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pagedData.map((row, index) => (
-                            <tr key={`${row.id}-${index}`}>
-                                <td>{row.id}</td>
-                                <td className="fw-semibold text-danger">{row.name}</td>
-                                <td>{row.class_name || '-'}</td>
-                                <td>{row.room_name || '-'}</td>
-                                <td><span className="badge bg-warning text-dark">{leaveTypeText[row.leave_type] || row.leave_type}</span></td>
-                                <td className="small text-muted">{String(row.exit_time || '').slice(0, 16)}</td>
-                                <td className="small fw-semibold text-danger">{String(row.end_time || '').slice(0, 16)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            {renderPagination()}
-        </>
-    );
-
     const renderContent = () => {
         if (!processedData.length) {
             return <div className="text-center py-4 text-muted">Không có dữ liệu chi tiết</div>;
@@ -657,8 +575,6 @@ const renderStatusBadge = (teacherAccept, managerAccept) => {
         if (isLeaveList) return renderLeaveTable();
         if (isRoomList) return renderRoomTable();
         if (isRoomRequestList) return renderRoomRequestTable();
-        if (isAccessList) return renderAccessTable();
-        if (isOverdueList) return renderOverdueTable();
         return <div className="text-center py-4 text-muted">Chưa có cấu hình hiển thị cho loại dữ liệu này</div>;
     };
 

@@ -9,10 +9,7 @@ leave_bp = Blueprint('leave', __name__)
 LEAVE_TYPES = {'REGULAR_WEEKEND', 'AFTER_SCHOOL', 'EMERGENCY'}
 
 def normalize_role(role_name):
-    role = (role_name or '').strip().lower()
-    if role in ('guard', 'guardian'):
-        return 'dorm_manager'
-    return role
+    return (role_name or '').strip().lower()
 
 def is_staff(role_name):
     return normalize_role(role_name) in {'teacher', 'manager', 'dorm_manager'}
@@ -147,15 +144,16 @@ def ensure_leave_schema(cursor):
             manager_accept VARCHAR(20) NOT NULL DEFAULT 'PENDING',
             dorm_manager_accept VARCHAR(20) NOT NULL DEFAULT 'PENDING',
             created_by CHAR(12),
-            created_by_role VARCHAR(30),
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             decided_by CHAR(12),
             decided_at DATETIME NULL,
             decision_note NVARCHAR(255),
             recurring_parent_id INT NULL,
             is_active INT DEFAULT 1,
-            FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID)
-        )
+            FOREIGN KEY (id_student) REFERENCES tStudent(id_VNeID),
+            FOREIGN KEY (created_by) REFERENCES tAccount(username) ON UPDATE CASCADE ON DELETE SET NULL,
+            FOREIGN KEY (decided_by) REFERENCES tAccount(username) ON UPDATE CASCADE ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
     try:
         cursor.execute("ALTER TABLE tLeaveRequest ADD COLUMN recurring_parent_id INT NULL")
@@ -332,13 +330,13 @@ def ensure_regular_week_instances(cursor, parent_row):
             cursor.execute("""
                 INSERT INTO tLeaveRequest
                 (id_student, leave_type, start_time, end_time, reason, teacher_accept, manager_accept, dorm_manager_accept,
-                 created_by, created_by_role, decided_by, decided_at, recurring_parent_id)
+                 created_by, decided_by, decided_at, recurring_parent_id)
                 VALUES (%s, 'REGULAR_WEEKEND', %s, %s, %s, %s, %s, 'NOT_REQUIRED',
-                        %s, %s, %s, CASE WHEN %s = 'ACCEPTED' OR %s = 'ACCEPTED' THEN %s ELSE NULL END, %s)
+                        %s, %s, CASE WHEN %s = 'ACCEPTED' OR %s = 'ACCEPTED' THEN %s ELSE NULL END, %s)
             """, (
                 student_id, start_time, end_time, parent_row.get('reason'),
                 teacher_acc, manager_acc,
-                parent_row.get('created_by'), parent_row.get('created_by_role'),
+                parent_row.get('created_by'),
                 decided_by, teacher_acc, manager_acc, parent_decided, parent_id
             ))
             created += 1
@@ -395,6 +393,7 @@ def get_leave_requests():
         cursor.execute(f"""
             SELECT lr.*, s.name AS student_name, c.name AS class_name,
                    COALESCE(cb_student.name, cb_teacher.name) AS created_by_name,
+                   cb_role.name AS created_by_role,
                    COALESCE(db_teacher.name, lr.decided_by) AS decided_by_name,
                    week.teacher_accept AS current_week_teacher_accept,
                    week.manager_accept AS current_week_manager_accept,
@@ -405,6 +404,8 @@ def get_leave_requests():
             JOIN tStudent s ON lr.id_student = s.id_VNeID
             LEFT JOIN STUDY st ON s.id_VNeID = st.id_student AND st.is_active = 1
             LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
+            LEFT JOIN tAccount cb_acc ON lr.created_by = cb_acc.username
+            LEFT JOIN tRole cb_role ON cb_acc.role_id = cb_role.id
             LEFT JOIN tStudent cb_student ON lr.created_by = cb_student.id_VNeID AND cb_student.is_active = 1
             LEFT JOIN tTeacher cb_teacher ON lr.created_by = cb_teacher.id_VNeID AND cb_teacher.is_active = 1
             LEFT JOIN tTeacher db_teacher ON lr.decided_by = db_teacher.id_VNeID AND db_teacher.is_active = 1
@@ -466,19 +467,24 @@ def create_leave_request():
             dorm_manager_accept = 'PENDING'
 
         status = leave_effective_status(leave_type, teacher_accept, manager_accept, dorm_manager_accept)
-        decided_by = data.get('created_by') if role_name in {'teacher', 'manager', 'dorm_manager'} else None
+        raw_created_by = (data.get('created_by') or '').strip() or None
+        if raw_created_by:
+            cursor.execute("SELECT username FROM tAccount WHERE username = %s", (raw_created_by,))
+            if not cursor.fetchone():
+                raw_created_by = None
+        decided_by = raw_created_by if role_name in {'teacher', 'manager', 'dorm_manager'} else None
         now = get_now()
         cursor.execute("""
             INSERT INTO tLeaveRequest
             (id_student, leave_type, start_time, end_time, reason,
              teacher_accept, manager_accept, dorm_manager_accept,
-             created_by, created_by_role, decided_by, decided_at, recurring_parent_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+             created_by, decided_by, decided_at, recurring_parent_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     CASE WHEN %s='ACCEPTED' THEN %s ELSE NULL END, NULL)
         """, (
             student_id, leave_type, start_time, end_time, data.get('reason'),
             teacher_accept, manager_accept, dorm_manager_accept,
-            data.get('created_by'), role_name, decided_by, status, now
+            raw_created_by, decided_by, status, now
         ))
         parent_id = cursor.lastrowid
         if leave_type == 'REGULAR_WEEKEND':
@@ -853,6 +859,7 @@ def export_leave_requests():
         cursor.execute(f"""
             SELECT lr.*, s.name AS student_name, c.name AS class_name,
                    COALESCE(cb_student.name, cb_teacher.name) AS created_by_name,
+                   cb_role.name AS created_by_role,
                    COALESCE(db_teacher.name, lr.decided_by) AS decided_by_name,
                    week.teacher_accept AS current_week_teacher_accept,
                    week.manager_accept AS current_week_manager_accept,
@@ -863,6 +870,8 @@ def export_leave_requests():
             JOIN tStudent s ON lr.id_student = s.id_VNeID
             LEFT JOIN STUDY st ON s.id_VNeID = st.id_student AND st.is_active = 1
             LEFT JOIN tClass c ON st.id_class = c.id AND c.is_active = 1
+            LEFT JOIN tAccount cb_acc ON lr.created_by = cb_acc.username
+            LEFT JOIN tRole cb_role ON cb_acc.role_id = cb_role.id
             LEFT JOIN tStudent cb_student ON lr.created_by = cb_student.id_VNeID AND cb_student.is_active = 1
             LEFT JOIN tTeacher cb_teacher ON lr.created_by = cb_teacher.id_VNeID AND cb_teacher.is_active = 1
             LEFT JOIN tTeacher db_teacher ON lr.decided_by = db_teacher.id_VNeID AND db_teacher.is_active = 1

@@ -70,8 +70,10 @@ def ensure_room_admin_request_schema(cursor):
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             processed_at DATETIME NULL,
             KEY idx_room_admin_request_teacher (id_teacher),
-            KEY idx_room_admin_request_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            KEY idx_room_admin_request_status (status),
+            CONSTRAINT fk_room_admin_teacher FOREIGN KEY (id_teacher) REFERENCES tTeacher(id_VNeID) ON UPDATE CASCADE ON DELETE CASCADE,
+            CONSTRAINT fk_room_admin_room FOREIGN KEY (id_dormroom) REFERENCES tDormroom(id) ON UPDATE CASCADE ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """)
 
 def validate_students_exist(cursor, student_ids):

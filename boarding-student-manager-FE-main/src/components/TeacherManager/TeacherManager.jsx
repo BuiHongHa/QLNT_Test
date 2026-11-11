@@ -1,12 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { apiUrl } from '../../config/api';
-import { getStoredUser } from '../../config/auth';
+import { getStoredUser, getUserRole } from '../../config/auth';
 import ConfirmModal from '../common/ConfirmModal';
 import { formatDate } from '../../utils/dateFormatter';
 
 const API = apiUrl('/api/teacher');
 const API_LOGIN = apiUrl('/api/login');
-const roleMap = { 1: 'teacher', 2: 'manager', 3: 'manager', 4: 'student', 5: 'dorm_manager', 6: 'canteen_manager' };
 const emptyForm = {
     id_VNeID: '',
     name: '',
@@ -28,10 +27,7 @@ const toDateInput = (value) => {
 
 const TeacherManager = () => {
     const user = getStoredUser() || {};
-    let userRole = user.role_name || roleMap[user.role_id] || '';
-    if (user.username === 'admin' || userRole === 'admin' || userRole === 'administrator') {
-        userRole = 'manager';
-    }
+    const userRole = getUserRole(user);
     const [teachers, setTeachers] = useState([]);
     const [roles, setRoles] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
