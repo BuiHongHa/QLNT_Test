@@ -409,7 +409,7 @@ const LeaveManager = () => {
             .catch(() => setMessage({ success: false, text: 'Lỗi kết nối server' }));
     };
 
-    const updateStatus = (id, status, decisionNote = null) => {
+    const updateStatus = (id, status, decisionNote = null, extraData = {}) => {
         fetch(`${API_LEAVE}/${id}/status`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -418,7 +418,8 @@ const LeaveManager = () => {
                 username: user.username,
                 role_name: roleName,
                 decision_note: decisionNote,
-                reason: decisionNote
+                reason: decisionNote,
+                ...extraData
             }),
         })
             .then(res => res.json())
@@ -460,7 +461,11 @@ const LeaveManager = () => {
         if (isWeekly) {
             updateCurrentWeekStatus(item.id, 'DENIED', reason);
         } else {
-            updateStatus(item.id, 'DENIED', reason);
+            const extraData = {};
+            if (roleName === 'manager' && item.leave_type === 'AFTER_SCHOOL') {
+                extraData.approval_column = (item.teacher_accept !== 'ACCEPTED') ? 'teacher_accept' : 'dorm_manager_accept';
+            }
+            updateStatus(item.id, 'DENIED', reason, extraData);
         }
     };
 
@@ -513,10 +518,18 @@ const LeaveManager = () => {
         }
 
         if (item.leave_type === 'AFTER_SCHOOL') {
-            const currentApproval = roleName === 'teacher'
-                ? (item.teacher_accept || 'PENDING')
-                : (item.dorm_manager_accept || 'PENDING');
-            confirmIfChanged(currentApproval, nextStatus, () => updateStatus(item.id, nextStatus));
+            let currentApproval = item.dorm_manager_accept || 'PENDING';
+            const extraData = {};
+            if (roleName === 'teacher') {
+                currentApproval = item.teacher_accept || 'PENDING';
+            } else if (roleName === 'manager') {
+                const needTeacher = (item.teacher_accept !== 'ACCEPTED');
+                currentApproval = needTeacher
+                    ? (item.teacher_accept || 'PENDING')
+                    : (item.dorm_manager_accept || 'PENDING');
+                extraData.approval_column = needTeacher ? 'teacher_accept' : 'dorm_manager_accept';
+            }
+            confirmIfChanged(currentApproval, nextStatus, () => updateStatus(item.id, nextStatus, null, extraData));
         } else if (item.leave_type === 'EMERGENCY') {
             const currentApproval = item.manager_accept || 'PENDING';
             confirmIfChanged(currentApproval, nextStatus, () => updateStatus(item.id, nextStatus));
@@ -544,19 +557,12 @@ const LeaveManager = () => {
             || registrationStatus === 'OVERDUE'
             || item.current_week_status === 'OVERDUE'
         ) {
-            return <span className="text-muted small">Đơn đã quá hạn</span>;
-        }
-
-        let startStr = item.start_time;
-        if (item.leave_type === 'REGULAR_WEEKEND') {
-            const regStatus = getRegistrationStatus(item);
-            if (regStatus === 'ACCEPTED' && item.current_week_start_time) {
-                startStr = item.current_week_start_time;
-            }
-        }
-
-        if (startStr && new Date(startStr.replace(' ', 'T')).getTime() < Date.now()) {
-            return <span className="text-muted small"></span>;
+            return (
+                <div className="d-flex gap-2 flex-wrap align-items-center">
+                    <span className="text-muted small">Đơn đã quá hạn</span>
+                    <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                </div>
+            );
         }
 
         // 1. ĐƠN RA NGOÀI: GVCN duyệt (Cấp 1) -> Quản lý KTX duyệt (Cấp 2)
@@ -565,6 +571,7 @@ const LeaveManager = () => {
                 return <span className="text-muted small">Chờ GVCN/QL KTX xử lý</span>;
             }
 
+            // GVCN duyệt Cấp 1
             if (roleName === 'teacher') {
                 const currentApproval = item.teacher_accept || 'PENDING';
                 return (
@@ -584,7 +591,49 @@ const LeaveManager = () => {
                 );
             }
 
-            // dorm_manager hoặc manager (Cấp 2)
+            // BGH (manager) có thể duyệt Cấp 1 nếu chưa duyệt, hoặc Cấp 2 nếu C1 đã duyệt
+            if (roleName === 'manager') {
+                const teacherApproval = item.teacher_accept || 'PENDING';
+                const dormApproval = item.dorm_manager_accept || 'PENDING';
+                if (teacherApproval === 'PENDING') {
+                    return (
+                        <div className="d-flex gap-2 flex-wrap">
+                            <button className="btn btn-sm btn-success" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'ACCEPTED'); }}>
+                                BGH Duyệt (C1)
+                            </button>
+                            <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'DENIED'); }}>
+                                Từ chối
+                            </button>
+                            <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                        </div>
+                    );
+                }
+                if (teacherApproval === 'DENIED') {
+                    return (
+                        <div className="d-flex gap-2 flex-wrap align-items-center">
+                            <span className="text-danger small">GVCN từ chối</span>
+                            <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                        </div>
+                    );
+                }
+                return (
+                    <div className="d-flex gap-2 flex-wrap">
+                        {dormApproval !== 'ACCEPTED' && (
+                            <button className="btn btn-sm btn-success" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'ACCEPTED'); }}>
+                                BGH Duyệt (C2)
+                            </button>
+                        )}
+                        {dormApproval !== 'DENIED' && (
+                            <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'DENIED'); }}>
+                                Từ chối
+                            </button>
+                        )}
+                        <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                    </div>
+                );
+            }
+
+            // dorm_manager (Cấp 2)
             const teacherApproval = item.teacher_accept || 'PENDING';
             if (teacherApproval === 'PENDING') {
                 return (

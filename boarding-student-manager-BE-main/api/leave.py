@@ -557,7 +557,13 @@ def update_leave_status(leave_id):
                     return jsonify({"success": False, "message": "Đơn xin ra ngoài cần được GVCN duyệt (Cấp 1) trước khi Quản lý KTX duyệt"}), 400
                 approval_column = 'dorm_manager_accept'
             elif role_name == 'manager':
-                approval_column = 'dorm_manager_accept'
+                requested_col = data.get('approval_column')
+                if requested_col in ('teacher_accept', 'dorm_manager_accept'):
+                    approval_column = requested_col
+                elif (leave.get('teacher_accept') or 'PENDING').strip().upper() != 'ACCEPTED':
+                    approval_column = 'teacher_accept'
+                else:
+                    approval_column = 'dorm_manager_accept'
             else:
                 cursor.close()
                 conn.close()
