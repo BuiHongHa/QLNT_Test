@@ -119,7 +119,9 @@ const LeaveManager = () => {
         const dorm = item.dorm_manager_accept || 'PENDING';
 
         if (leaveType === 'AFTER_SCHOOL') {
-            return dorm;
+            if (teacher === 'DENIED' || dorm === 'DENIED') return 'DENIED';
+            if (teacher === 'ACCEPTED' && dorm === 'ACCEPTED') return 'ACCEPTED';
+            return 'PENDING';
         }
         if (leaveType === 'EMERGENCY') {
             return manager;
@@ -149,7 +151,11 @@ const LeaveManager = () => {
         if (item.status) return item.status;
         const leaveType = item.leave_type;
         if (leaveType === 'AFTER_SCHOOL') {
-            return getDormManagerApproval(item);
+            const teacher = getTeacherApproval(item);
+            const dorm = getDormManagerApproval(item);
+            if (teacher === 'DENIED' || dorm === 'DENIED') return 'DENIED';
+            if (teacher === 'ACCEPTED' && dorm === 'ACCEPTED') return 'ACCEPTED';
+            return 'PENDING';
         }
         if (leaveType === 'EMERGENCY') {
             return getManagerApproval(item);
@@ -507,7 +513,9 @@ const LeaveManager = () => {
         }
 
         if (item.leave_type === 'AFTER_SCHOOL') {
-            const currentApproval = item.dorm_manager_accept || 'PENDING';
+            const currentApproval = roleName === 'teacher'
+                ? (item.teacher_accept || 'PENDING')
+                : (item.dorm_manager_accept || 'PENDING');
             confirmIfChanged(currentApproval, nextStatus, () => updateStatus(item.id, nextStatus));
         } else if (item.leave_type === 'EMERGENCY') {
             const currentApproval = item.manager_accept || 'PENDING';
@@ -551,17 +559,56 @@ const LeaveManager = () => {
             return <span className="text-muted small"></span>;
         }
 
-        // 1. ĐƠN RA NGOÀI: Quản lý KTX duyệt
+        // 1. ĐƠN RA NGOÀI: GVCN duyệt (Cấp 1) -> Quản lý KTX duyệt (Cấp 2)
         if (item.leave_type === 'AFTER_SCHOOL') {
-            if (roleName !== 'dorm_manager' && roleName !== 'manager') {
-                return <span className="text-muted small">Chờ QL KTX xử lý</span>;
+            if (roleName !== 'teacher' && roleName !== 'dorm_manager' && roleName !== 'manager') {
+                return <span className="text-muted small">Chờ GVCN/QL KTX xử lý</span>;
             }
+
+            if (roleName === 'teacher') {
+                const currentApproval = item.teacher_accept || 'PENDING';
+                return (
+                    <div className="d-flex gap-2 flex-wrap">
+                        {currentApproval !== 'ACCEPTED' && (
+                            <button className="btn btn-sm btn-success" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'ACCEPTED'); }}>
+                                GVCN Duyệt
+                            </button>
+                        )}
+                        {currentApproval !== 'DENIED' && (
+                            <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'DENIED'); }}>
+                                Từ chối
+                            </button>
+                        )}
+                        <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                    </div>
+                );
+            }
+
+            // dorm_manager hoặc manager (Cấp 2)
+            const teacherApproval = item.teacher_accept || 'PENDING';
+            if (teacherApproval === 'PENDING') {
+                return (
+                    <div className="d-flex gap-2 flex-wrap align-items-center">
+                        <span className="text-muted small">Chờ GVCN duyệt (C1)</span>
+                        <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                    </div>
+                );
+            }
+            if (teacherApproval === 'DENIED') {
+                return (
+                    <div className="d-flex gap-2 flex-wrap align-items-center">
+                        <span className="text-danger small">GVCN từ chối</span>
+                        <button className="btn btn-sm btn-outline-danger" onClick={(e) => { e.stopPropagation(); deleteLeave(item); }}>Xoá</button>
+                    </div>
+                );
+            }
+
             const currentApproval = item.dorm_manager_accept || 'PENDING';
             return (
                 <div className="d-flex gap-2 flex-wrap">
                     {currentApproval !== 'ACCEPTED' && (
                         <button className="btn btn-sm btn-success" onClick={(e) => { e.stopPropagation(); handleStaffStatus(item, 'ACCEPTED'); }}>
-                            Duyệt đơn
+                            QL KTX Duyệt
                         </button>
                     )}
                     {currentApproval !== 'DENIED' && (
@@ -990,14 +1037,15 @@ const LeaveManager = () => {
                                     <td>{formatDateRange(item)}</td>
                                     <td>
                                         {item.leave_type === 'AFTER_SCHOOL' ? (() => {
+                                            const t = item.teacher_accept || 'PENDING';
                                             const d = item.dorm_manager_accept || 'PENDING';
                                             const eff = getEffectiveStatus(item);
                                             if (eff === 'OVERDUE') return renderBadge('OVERDUE');
-                                            return (
-                                                <span className={`badge ${statusClass[d] || 'bg-secondary'}`}>
-                                                    {d === 'ACCEPTED' ? 'Đã duyệt' : d === 'DENIED' ? 'Từ chối' : 'Chờ QL KTX duyệt'}
-                                                </span>
-                                            );
+                                            if (t === 'DENIED') return <span className="badge bg-danger">GVCN từ chối</span>;
+                                            if (d === 'DENIED') return <span className="badge bg-danger">QL KTX từ chối</span>;
+                                            if (t === 'ACCEPTED' && d === 'ACCEPTED') return <span className="badge bg-success">Đã duyệt 2 cấp</span>;
+                                            if (t === 'ACCEPTED') return <span className="badge bg-info text-dark">Chờ QL KTX duyệt (C2)</span>;
+                                            return <span className="badge bg-secondary">Chờ GVCN duyệt (C1)</span>;
                                         })() : item.leave_type === 'EMERGENCY' ? (() => {
                                             const m = item.manager_accept || 'PENDING';
                                             const eff = getEffectiveStatus(item);
@@ -1072,10 +1120,16 @@ const LeaveManager = () => {
                                         <div>{renderBadge(getEffectiveStatus(detailItem))}</div>
                                     </div>
                                     {detailItem.leave_type === 'AFTER_SCHOOL' && (
-                                        <div className="col-md-6">
-                                            <div className="small text-muted">Quản lý KTX duyệt</div>
-                                            <div>{renderBadge(getDormManagerApproval(detailItem))}</div>
-                                        </div>
+                                        <>
+                                            <div className="col-md-6">
+                                                <div className="small text-muted">Cấp 1: GVCN duyệt</div>
+                                                <div>{renderBadge(getTeacherApproval(detailItem))}</div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="small text-muted">Cấp 2: Quản lý KTX duyệt</div>
+                                                <div>{renderBadge(getDormManagerApproval(detailItem))}</div>
+                                            </div>
+                                        </>
                                     )}
                                     {detailItem.leave_type === 'EMERGENCY' && (
                                         <div className="col-md-6">

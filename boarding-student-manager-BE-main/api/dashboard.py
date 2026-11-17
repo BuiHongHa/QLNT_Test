@@ -19,7 +19,7 @@ def normalize_role(role_name):
 
 APPROVED_LEAVE_ACTIVE_CONDITION = """
     (
-        (lr.leave_type = 'AFTER_SCHOOL' AND lr.start_time <= %s AND lr.end_time >= %s AND lr.dorm_manager_accept = 'ACCEPTED')
+        (lr.leave_type = 'AFTER_SCHOOL' AND lr.start_time <= %s AND lr.end_time >= %s AND lr.teacher_accept = 'ACCEPTED' AND lr.dorm_manager_accept = 'ACCEPTED')
         OR (lr.leave_type = 'EMERGENCY' AND lr.start_time <= %s AND lr.end_time >= %s AND lr.manager_accept = 'ACCEPTED')
         OR (lr.leave_type = 'REGULAR_WEEKEND' AND lr.recurring_parent_id IS NULL AND week.teacher_accept = 'ACCEPTED' AND week.manager_accept = 'ACCEPTED')
     )
@@ -38,6 +38,7 @@ def dashboard_leave_detail_select():
             lr.reason,
             lr.teacher_accept,
             lr.manager_accept,
+            lr.dorm_manager_accept,
             c.name AS class_name,
             d.name AS room_name
         FROM tLeaveRequest lr
@@ -113,9 +114,14 @@ def is_pending_leave_actionable(row, role_name, now=None):
         return False
 
     if leave_type == 'AFTER_SCHOOL':
-        if role_name not in ('dorm_manager', 'manager'):
+        if role_name == 'teacher':
+            relevant_approval = row.get('teacher_accept')
+        elif role_name in ('dorm_manager', 'manager'):
+            if (row.get('teacher_accept') or 'PENDING').strip().upper() != 'ACCEPTED':
+                return False
+            relevant_approval = row.get('dorm_manager_accept')
+        else:
             return False
-        relevant_approval = row.get('dorm_manager_accept')
     elif leave_type == 'EMERGENCY':
         if role_name != 'manager':
             return False
@@ -470,7 +476,8 @@ def get_dashboard_stats():
 
             cursor.execute("""
                 SELECT COUNT(*) AS cnt FROM tLeaveRequest
-                WHERE is_active = 1 AND leave_type = 'AFTER_SCHOOL' AND dorm_manager_accept = 'PENDING'
+                WHERE is_active = 1 AND leave_type = 'AFTER_SCHOOL'
+                  AND teacher_accept = 'ACCEPTED' AND dorm_manager_accept = 'PENDING'
             """)
             result['pending_after_school'] = (cursor.fetchone() or {}).get('cnt', 0)
 

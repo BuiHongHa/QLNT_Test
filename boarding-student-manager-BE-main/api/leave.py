@@ -20,10 +20,10 @@ def leave_effective_status(leave_type, teacher_accept, manager_accept, dorm_mana
     d = (dorm_manager_accept or 'PENDING').strip().upper()
 
     if leave_type == 'AFTER_SCHOOL':
-        # Đơn ra ngoài: Quản lý KTX duyệt
-        if d == 'DENIED':
+        # Đơn ra ngoài: GVCN duyệt (Cấp 1) -> QL KTX duyệt (Cấp 2)
+        if t == 'DENIED' or d == 'DENIED':
             return 'DENIED'
-        if d == 'ACCEPTED':
+        if t == 'ACCEPTED' and d == 'ACCEPTED':
             return 'ACCEPTED'
         return 'PENDING'
 
@@ -55,11 +55,15 @@ def leave_stage_text(leave_type, teacher_accept, manager_accept, dorm_manager_ac
     d = (dorm_manager_accept or 'PENDING').strip().upper()
 
     if leave_type == 'AFTER_SCHOOL':
-        if d == 'ACCEPTED':
-            return 'QL KTX đã duyệt'
+        if t == 'DENIED':
+            return 'GVCN từ chối'
         if d == 'DENIED':
             return 'QL KTX từ chối'
-        return 'Chờ QL KTX duyệt'
+        if t == 'ACCEPTED' and d == 'ACCEPTED':
+            return 'Đã duyệt 2 cấp'
+        if t == 'ACCEPTED' and d == 'PENDING':
+            return 'Chờ QL KTX duyệt (Cấp 2)'
+        return 'Chờ GVCN duyệt (Cấp 1)'
 
     elif leave_type == 'EMERGENCY':
         if m == 'ACCEPTED':
@@ -91,9 +95,9 @@ def approval_column_for_role(role_name, leave_type):
     if role_name == 'dorm_manager':
         return 'dorm_manager_accept' if leave_type == 'AFTER_SCHOOL' else None
     if role_name == 'teacher':
-        return 'teacher_accept' if leave_type == 'REGULAR_WEEKEND' else None
+        return 'teacher_accept' if leave_type in {'REGULAR_WEEKEND', 'AFTER_SCHOOL'} else None
     if role_name == 'manager':
-        return 'manager_accept'
+        return 'dorm_manager_accept' if leave_type == 'AFTER_SCHOOL' else 'manager_accept'
     return None
 
 def can_view_leave(cursor, role_name, username, leave_row):
@@ -200,6 +204,17 @@ def ensure_leave_schema(cursor):
         """)
         if (cursor.fetchone() or {}).get('cnt'):
             cursor.execute("ALTER TABLE tLeaveRequest DROP COLUMN status")
+    except Exception:
+        pass
+    try:
+        cursor.execute("""
+            UPDATE tLeaveRequest
+            SET teacher_accept = 'PENDING'
+            WHERE leave_type = 'AFTER_SCHOOL'
+              AND teacher_accept = 'NOT_REQUIRED'
+              AND dorm_manager_accept = 'PENDING'
+              AND is_active = 1
+        """)
     except Exception:
         pass
 
@@ -450,9 +465,9 @@ def create_leave_request():
             return jsonify({"success": False, "message": "Không tìm thấy học sinh"}), 404
 
         if leave_type == 'AFTER_SCHOOL':
-            teacher_accept = 'NOT_REQUIRED'
+            teacher_accept = 'ACCEPTED' if role_name in {'teacher', 'manager'} else 'PENDING'
             manager_accept = 'NOT_REQUIRED'
-            dorm_manager_accept = 'ACCEPTED' if role_name in {'dorm_manager', 'manager'} else 'PENDING'
+            dorm_manager_accept = 'ACCEPTED' if role_name == 'manager' else 'PENDING'
         elif leave_type == 'EMERGENCY':
             teacher_accept = 'NOT_REQUIRED'
             manager_accept = 'ACCEPTED' if role_name == 'manager' else 'PENDING'
@@ -529,11 +544,24 @@ def update_leave_status(leave_id):
 
         leave_type = leave['leave_type']
         if leave_type == 'AFTER_SCHOOL':
-            if role_name not in {'dorm_manager', 'manager'}:
+            if role_name == 'teacher':
+                if not teacher_manages_student(cursor, data.get('username'), leave['id_student']):
+                    cursor.close()
+                    conn.close()
+                    return jsonify({"success": False, "message": "Không có quyền cập nhật đơn ngoài lớp quản lý"}), 403
+                approval_column = 'teacher_accept'
+            elif role_name == 'dorm_manager':
+                if status == 'ACCEPTED' and (leave.get('teacher_accept') or 'PENDING').strip().upper() != 'ACCEPTED':
+                    cursor.close()
+                    conn.close()
+                    return jsonify({"success": False, "message": "Đơn xin ra ngoài cần được GVCN duyệt (Cấp 1) trước khi Quản lý KTX duyệt"}), 400
+                approval_column = 'dorm_manager_accept'
+            elif role_name == 'manager':
+                approval_column = 'dorm_manager_accept'
+            else:
                 cursor.close()
                 conn.close()
-                return jsonify({"success": False, "message": "Chỉ Quản lý Ký túc xá mới có quyền duyệt đơn ra ngoài"}), 403
-            approval_column = 'dorm_manager_accept'
+                return jsonify({"success": False, "message": "Chỉ GVCN (cấp 1) hoặc Quản lý KTX (cấp 2) mới có quyền duyệt đơn ra ngoài"}), 403
         elif leave_type == 'REGULAR_WEEKEND':
             if role_name == 'teacher':
                 if not teacher_manages_student(cursor, data.get('username'), leave['id_student']):
@@ -908,6 +936,7 @@ def export_leave_requests():
 
         data_rows = []
         for idx, r in enumerate(rows, 1):
+            ql_val = r.get('dorm_manager_accept') if r.get('leave_type') == 'AFTER_SCHOOL' else r.get('manager_accept')
             data_rows.append([
                 idx,
                 r.get('id_student', ''),
@@ -918,7 +947,7 @@ def export_leave_requests():
                 r.get('end_time', ''),
                 r.get('reason', ''),
                 status_map.get(r.get('teacher_accept'), r.get('teacher_accept', '')),
-                status_map.get(r.get('manager_accept'), r.get('manager_accept', '')),
+                status_map.get(ql_val, ql_val or ''),
                 status_map.get(r.get('status'), r.get('status', '')),
                 r.get('created_by_name') or r.get('created_by', ''),
                 r.get('decided_by_name') or r.get('decided_by', ''),

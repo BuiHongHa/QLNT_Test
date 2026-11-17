@@ -163,7 +163,7 @@ def get_room_students_attendance(room_id):
                   AND (
                       (leave_type = 'REGULAR_WEEKEND' AND teacher_accept = 'ACCEPTED' AND manager_accept = 'ACCEPTED')
                       OR (leave_type = 'EMERGENCY' AND manager_accept = 'ACCEPTED')
-                      OR (leave_type = 'AFTER_SCHOOL' AND dorm_manager_accept = 'ACCEPTED')
+                      OR (leave_type = 'AFTER_SCHOOL' AND teacher_accept = 'ACCEPTED' AND dorm_manager_accept = 'ACCEPTED')
                   )
                   AND DATE(start_time) <= %s
                   AND DATE(end_time) >= %s

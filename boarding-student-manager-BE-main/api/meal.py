@@ -16,7 +16,11 @@ def leave_effective_status(leave_row):
     leave_type = leave_row.get('leave_type')
 
     if leave_type == 'AFTER_SCHOOL':
-        return 'ACCEPTED' if dorm_manager_accept == 'ACCEPTED' else 'DENIED' if dorm_manager_accept == 'DENIED' else 'PENDING'
+        if teacher_accept == 'DENIED' or dorm_manager_accept == 'DENIED':
+            return 'DENIED'
+        if teacher_accept == 'ACCEPTED' and dorm_manager_accept == 'ACCEPTED':
+            return 'ACCEPTED'
+        return 'PENDING'
     if leave_type == 'EMERGENCY':
         return 'ACCEPTED' if manager_accept == 'ACCEPTED' else 'DENIED' if manager_accept == 'DENIED' else 'PENDING'
     if leave_type == 'REGULAR_WEEKEND':

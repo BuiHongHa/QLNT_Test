@@ -410,7 +410,16 @@ const DashboardDetailModal = ({
         </>
     );
 
-const renderStatusBadge = (teacherAccept, managerAccept) => {
+const renderStatusBadge = (teacherAccept, managerAccept, dormManagerAccept, leaveType) => {
+    if (leaveType === 'AFTER_SCHOOL') {
+        const t = teacherAccept || 'PENDING';
+        const d = dormManagerAccept || 'PENDING';
+        if (t === 'DENIED') return <span className="badge bg-danger">GVCN từ chối</span>;
+        if (d === 'DENIED') return <span className="badge bg-danger">QL KTX từ chối</span>;
+        if (t === 'ACCEPTED' && d === 'ACCEPTED') return <span className="badge bg-success">Đã duyệt 2 cấp</span>;
+        if (t === 'ACCEPTED') return <span className="badge bg-info text-dark">Chờ QL KTX duyệt</span>;
+        return <span className="badge bg-secondary">Chờ GVCN duyệt</span>;
+    }
     if (teacherAccept === 'DENIED' || managerAccept === 'DENIED') {
         return <span className="badge bg-danger">Bị từ chối</span>;
     }
@@ -452,7 +461,7 @@ const renderStatusBadge = (teacherAccept, managerAccept) => {
                                 <td><span className="badge bg-primary-subtle text-primary">{leaveTypeText[row.leave_type] || row.leave_type}</span></td>
                                 <td className="small">{`${String(row.start_time || '').slice(0, 16)} - ${String(row.end_time || '').slice(0, 16)}`}</td>
                                 <td>{row.reason || '-'}</td>
-                                <td>{renderStatusBadge(row.teacher_accept, row.manager_accept)}</td>
+                                <td>{renderStatusBadge(row.teacher_accept, row.manager_accept, row.dorm_manager_accept, row.leave_type)}</td>
                                 {isPendingLeaves && (
                                     <td>
                                         <div className="d-flex gap-2 flex-wrap">
