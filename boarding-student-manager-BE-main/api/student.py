@@ -273,6 +273,7 @@ def export_students():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@student_bp.route('', methods=['GET'])
 @student_bp.route('/', methods=['GET'])
 def get_students():
     teacher_id = request.args.get('teacher_id')
@@ -566,6 +567,7 @@ def get_student_card(id_vneid):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@student_bp.route('', methods=['POST'])
 @student_bp.route('/', methods=['POST'])
 def create_student():
     data = request.json

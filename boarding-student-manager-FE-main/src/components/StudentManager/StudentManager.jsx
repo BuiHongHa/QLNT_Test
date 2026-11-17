@@ -66,7 +66,7 @@ const StudentManager = () => {
         setUserRole(role);
         const teacherParam = role === 'teacher' && user?.username !== 'admin' ? `?teacher_id=${user.username}` : '';
 
-        fetch(`${API_STUDENT}${teacherParam}`)
+        fetch(`${API_STUDENT}/${teacherParam}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) setStudents(data.data);
