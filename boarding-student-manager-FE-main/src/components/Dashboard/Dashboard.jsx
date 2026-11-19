@@ -29,7 +29,6 @@ const Dashboard = () => {
     const [stats, setStats] = useState(null);
     const [inspStats, setInspStats] = useState(null);
     const [clock, setClock] = useState(new Date());
-    const [mockNow, setMockNow] = useState(null);
     const [detailModal, setDetailModal] = useState(emptyDetailModal);
     const [approvalNotice, setApprovalNotice] = useState({ total: 0, items: [] });
 
@@ -74,24 +73,8 @@ const Dashboard = () => {
             setRoleName(getUserRole(parsed));
         }
 
-        const fetchMockTime = () => {
-            fetch(apiUrl('/api/debug/mock-time'))
-                .then((response) => response.json())
-                .then((data) => {
-                    if (data.mock_active && data.effective_now) {
-                        setMockNow(new Date(data.effective_now.replace(' ', 'T')));
-                    } else {
-                        setMockNow(null);
-                    }
-                })
-                .catch(() => setMockNow(null));
-        };
-
-        fetchMockTime();
-
         const timer = setInterval(() => {
             setClock(new Date());
-            fetchMockTime();
         }, 1000);
 
         return () => clearInterval(timer);
@@ -188,7 +171,7 @@ const Dashboard = () => {
     const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
     const pad = (value) => String(value).padStart(2, '0');
 
-    const displayDate = mockNow || clock;
+    const displayDate = clock;
     const clockDate = `${weekdays[displayDate.getDay()]}, ngày ${pad(displayDate.getDate())}/${pad(displayDate.getMonth() + 1)}/${displayDate.getFullYear()}`;
     const clockTime = `${pad(displayDate.getHours())}:${pad(displayDate.getMinutes())}:${pad(displayDate.getSeconds())}`;
     const roleLabel = user?.role_label || roleLabelMap[roleName] || 'Người dùng';
@@ -606,23 +589,6 @@ const Dashboard = () => {
                     <div style={{ fontSize: '0.95rem', opacity: 0.85, marginTop: '2px' }}>
                         {clockDate}
                     </div>
-                    {mockNow && (
-                        <span
-                            style={{
-                                display: 'inline-block',
-                                marginTop: '6px',
-                                background: '#ffc107',
-                                color: '#333',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                padding: '2px 8px',
-                                borderRadius: '20px',
-                                letterSpacing: '0.5px',
-                            }}
-                        >
-                            Thời gian ảo
-                        </span>
-                    )}
                 </div>
             </div>
 
